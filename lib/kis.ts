@@ -1,5 +1,6 @@
 // KIS Open API 공용 헬퍼 (토큰 발급/캐시 + GET 호출)
 // 앱키/시크릿은 .env.local 에서 읽습니다. (코드에 직접 적지 않기!)
+import { storeGet, storeSet } from "./store";
 
 const BASE = process.env.KIS_BASE || "https://openapi.koreainvestment.com:9443";
 const APP_KEY = process.env.KIS_APP_KEY || "";
@@ -11,11 +12,13 @@ export const STOCKS: Record<string, { name: string }> = {
   "000660": { name: "SK하이닉스" },
 };
 
-// 접근토큰은 24시간 유효 → 메모리에 캐시해서 재사용 (KIS 권장)
-// KIS는 토큰 발급을 "1분당 1회"로 제한하므로, 여러 요청이 동시에 와도
-// 발급은 딱 한 번만 하고 모두가 그 결과를 같이 기다리게 한다(single-flight).
+// 접근토큰은 24시간 유효 → 재사용. 서버리스(Vercel)에선 요청마다 인스턴스가 따로라
+// 각자 발급하면 "1분당 1회" 제한(EGW00133)에 걸린다. → 공유 저장소(Redis)에 토큰을
+// 저장해 모든 인스턴스가 같은 토큰을 재사용한다. (저장소 없으면 메모리만 사용)
+const TOKEN_KEY = "kis:token";
 let cachedToken: { token: string; expires: number } | null = null;
 let inflight: Promise<string> | null = null;
+const _sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function issueToken(): Promise<string> {
   if (!APP_KEY || !APP_SECRET) {
@@ -37,18 +40,39 @@ async function issueToken(): Promise<string> {
       `KIS 토큰 발급 실패 (${res.status}). ${data.error_description || data.msg1 || "앱키를 확인하세요."}`
     );
   }
-  cachedToken = {
-    token: data.access_token,
-    expires: Date.now() + 23 * 60 * 60 * 1000, // 만료(24h) 약간 전에 갱신
-  };
-  return data.access_token;
+  const token: string = data.access_token;
+  cachedToken = { token, expires: Date.now() + 23 * 60 * 60 * 1000 };
+  await storeSet(TOKEN_KEY, token, 23 * 60 * 60); // 공유 저장소에도 저장(인스턴스 간 재사용)
+  return token;
+}
+
+// 발급 실패(동시 발급 경쟁 등) 시, 다른 인스턴스가 막 저장했을 수 있으니 잠깐 뒤 저장소 재확인
+async function issueOrReuse(): Promise<string> {
+  try {
+    return await issueToken();
+  } catch (e) {
+    await _sleep(1500);
+    const again = await storeGet<string>(TOKEN_KEY);
+    if (again) {
+      cachedToken = { token: again, expires: Date.now() + 60 * 60 * 1000 };
+      return again;
+    }
+    throw e;
+  }
 }
 
 export async function getToken(): Promise<string> {
+  // 1) 메모리 캐시
   if (cachedToken && cachedToken.expires > Date.now()) return cachedToken.token;
-  // 이미 발급 요청이 진행 중이면 새로 발급하지 않고 그 요청을 함께 기다린다.
+  // 2) 공유 저장소(Redis) — 서버리스 인스턴스 간 토큰 공유
+  const stored = await storeGet<string>(TOKEN_KEY);
+  if (stored) {
+    cachedToken = { token: stored, expires: Date.now() + 60 * 60 * 1000 };
+    return stored;
+  }
+  // 3) 없으면 발급(같은 인스턴스 내 동시 발급 방지)
   if (!inflight) {
-    inflight = issueToken().finally(() => {
+    inflight = issueOrReuse().finally(() => {
       inflight = null;
     });
   }
