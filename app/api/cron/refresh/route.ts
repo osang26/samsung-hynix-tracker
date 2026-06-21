@@ -43,6 +43,8 @@ export async function GET(req: Request) {
       await hit(`chart ${code} ${range}`, `${base}/api/chart?code=${code}&range=${range}&force=1`);
     }
     await hit(`fin ${code}`, `${base}/api/financials?code=${code}&force=1`);
+    await hit(`daily ${code}`, `${base}/api/daily?code=${code}&force=1`);
+    await hit(`consensus ${code}`, `${base}/api/consensus?code=${code}&force=1`);
   }
   for (const code of codes) {
     const q = STOCKS[code].name;

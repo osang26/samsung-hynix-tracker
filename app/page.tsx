@@ -63,41 +63,35 @@ function compactVol(v: any): string {
   if (n >= 1e4) return Math.round(n / 1e4) + "만";
   return String(n);
 }
+function eokAmount(w: any): string {
+  const n = Number(w) || 0;
+  if (n <= 0) return "-";
+  const eok = n / 1e8;
+  if (eok >= 10000) return (eok / 10000).toFixed(1) + "조";
+  if (eok >= 1) return Math.round(eok).toLocaleString("ko-KR") + "억";
+  return Math.round(n / 1e4).toLocaleString("ko-KR") + "만";
+}
+function pct52(price: number, low: number, high: number): number {
+  if (!(high > low)) return 50;
+  return Math.max(0, Math.min(100, ((price - low) / (high - low)) * 100));
+}
 
-function StockCard({ code, name, color }: { code: string; name: string; color: string }) {
-  const [quote, setQuote] = useState<any>(null);
-  const [qErr, setQErr] = useState("");
+function StockCard({ code, name, color, quote }: { code: string; name: string; color: string; quote: any }) {
+  const qErr = quote && quote.error ? quote.error : "";
   const [chart, setChart] = useState<any>(null);
   const [fin, setFin] = useState<any>(null);
   const [news, setNews] = useState<any>(null);
+  const [daily, setDaily] = useState<any>(null);
+  const [consensus, setConsensus] = useState<any>(null);
   const [tab, setTab] = useState("chart"); // chart | news | fin
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
-
-  const loadQuote = useCallback(async () => {
-    try {
-      const r = await fetch(`/api/quote?code=${code}`);
-      const d = await r.json();
-      if (d.error) setQErr(d.error);
-      else {
-        setQuote(d);
-        setQErr("");
-      }
-    } catch {
-      setQErr("네트워크 오류");
-    }
-  }, [code]);
-
-  // 현재가: 즉시 + 5초마다
-  useEffect(() => {
-    loadQuote();
-    const id = setInterval(loadQuote, 5000);
-    return () => clearInterval(id);
-  }, [loadQuote]);
 
   // 재무 / 뉴스: 1회
   useEffect(() => {
     fetch(`/api/financials?code=${code}`).then((r) => r.json()).then(setFin).catch(() => setFin({ error: "재무 오류" }));
     fetch(`/api/news?q=${encodeURIComponent(name)}`).then((r) => r.json()).then(setNews).catch(() => setNews({ error: "뉴스 오류" }));
+    fetch(`/api/daily?code=${code}`).then((r) => r.json()).then(setDaily).catch(() => setDaily({ error: "일별시세 오류" }));
+    fetch(`/api/consensus?code=${code}`).then((r) => r.json()).then(setConsensus).catch(() => setConsensus(null));
   }, [code, name]);
 
   // 차트: 기간(range)이 바뀔 때마다 다시 받아옴
@@ -120,6 +114,12 @@ function StockCard({ code, name, color }: { code: string; name: string; color: s
     quote && quote.marketCap && ttmNet && ttmNet > 0 ? quote.marketCap / ttmNet : null;
   const perText = perCalc != null ? perCalc.toFixed(1) + "배" : fin === null ? "…" : "-";
 
+  // 컨센서스 상승여력 = (평균 목표가 - 현재가) / 현재가
+  const consUpside =
+    consensus && consensus.avgTarget && quote && quote.price
+      ? ((consensus.avgTarget - quote.price) / quote.price) * 100
+      : null;
+
   return (
     <div className="card">
       <div className="top">
@@ -131,7 +131,7 @@ function StockCard({ code, name, color }: { code: string; name: string; color: s
 
       {qErr && <div className="err">{qErr}</div>}
       {!quote && !qErr && <div className="skeleton">현재가 불러오는 중…</div>}
-      {quote && (
+      {quote && !quote.error && (
         <>
           <div className="price">{won(quote.price)}</div>
           <div className={"change " + dirClass(quote.dir)}>
@@ -174,7 +174,7 @@ function StockCard({ code, name, color }: { code: string; name: string; color: s
                   <LineChart data={chart.series} margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
                     <XAxis dataKey="label" hide />
                     <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fill: "#7e8ca6" }} width={50} tickFormatter={(v: any) => Number(v).toLocaleString("ko-KR")} />
-                    <Tooltip formatter={(v: any) => won(v)} contentStyle={{ background: "#0f1a2e", border: "1px solid #25344f", borderRadius: 8, fontSize: 12, color: "#eaf0fb" }} />
+                    <Tooltip formatter={(v: any) => won(v)} contentStyle={{ background: "#ffffff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434", boxShadow: "0 2px 10px rgba(20,40,80,0.12)" }} />
                     <Line type="monotone" dataKey="close" name="가격" stroke={color} strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -183,7 +183,7 @@ function StockCard({ code, name, color }: { code: string; name: string; color: s
                   <BarChart data={chart.series} margin={{ top: 0, right: 8, left: 8, bottom: 0 }} barCategoryGap={0}>
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#7e8ca6" }} minTickGap={36} />
                     <YAxis width={50} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={(v: any) => compactVol(v)} />
-                    <Tooltip formatter={(v: any) => Number(v).toLocaleString("ko-KR") + "주"} contentStyle={{ background: "#0f1a2e", border: "1px solid #25344f", borderRadius: 8, fontSize: 12, color: "#eaf0fb" }} />
+                    <Tooltip formatter={(v: any) => Number(v).toLocaleString("ko-KR") + "주"} contentStyle={{ background: "#ffffff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434", boxShadow: "0 2px 10px rgba(20,40,80,0.12)" }} />
                     <Bar dataKey="volume" name="거래량" fill="#5b7bb5" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -195,6 +195,70 @@ function StockCard({ code, name, color }: { code: string; name: string; color: s
             )}
             {chart && chart.candle && chart.series && chart.series.length > 0 && (
               <div className="fin-note">{chart.candle} 기준 · {chart.series.length}개</div>
+            )}
+
+            {quote && quote.high52 > 0 && quote.low52 > 0 && (
+              <div className="block52">
+                <div className="sec">52주 범위</div>
+                <div className="r52-track">
+                  <div className="r52-dot" style={{ left: pct52(quote.price, quote.low52, quote.high52) + "%" }} />
+                </div>
+                <div className="r52-ends">
+                  <span>최저 <b className="down">{won(quote.low52)}</b></span>
+                  <span>최고 <b className="up">{won(quote.high52)}</b></span>
+                </div>
+              </div>
+            )}
+
+            {consensus && consensus.count > 0 && (
+              <div className="consensus">
+                <div className="sec">증권가 컨센서스 <span className="sub">최근 6개월 · KIS</span></div>
+                <div className="cons-top">
+                  <div className="cons-cell">
+                    <div className="k">평균 목표가</div>
+                    <div className="v">{consensus.avgTarget ? won(consensus.avgTarget) : "-"}</div>
+                  </div>
+                  <div className="cons-cell">
+                    <div className="k">상승여력</div>
+                    <div className={"v " + (consUpside == null ? "" : consUpside >= 0 ? "up" : "down")}>
+                      {consUpside == null ? "-" : (consUpside >= 0 ? "+" : "") + consUpside.toFixed(1) + "%"}
+                    </div>
+                  </div>
+                </div>
+                <div className="cons-ops">
+                  <span className="up">매수 {consensus.buy}</span>
+                  <span className="flat">보유 {consensus.hold}</span>
+                  <span className="down">매도 {consensus.sell}</span>
+                  <span className="cons-cnt">· 분석 {consensus.count}곳</span>
+                </div>
+                <div className="cons-bar">
+                  {consensus.buy > 0 && <div className="seg up" style={{ flexGrow: consensus.buy }} />}
+                  {consensus.hold > 0 && <div className="seg flat" style={{ flexGrow: consensus.hold }} />}
+                  {consensus.sell > 0 && <div className="seg down" style={{ flexGrow: consensus.sell }} />}
+                </div>
+              </div>
+            )}
+
+            {daily && daily.rows && daily.rows.length > 0 && (
+              <div className="dailytable">
+                <div className="sec">일별 시세 <span className="sub">최근 30일 · KIS</span></div>
+                <div className="dt-head">
+                  <span>날짜</span><span>종가</span><span>등락률</span><span>거래량</span><span>거래대금</span>
+                </div>
+                <div className="dt-body">
+                  {daily.rows.map((d: any, i: number) => (
+                    <div className="dt-row" key={i}>
+                      <span>{d.date}</span>
+                      <span>{Number(d.close).toLocaleString("ko-KR")}</span>
+                      <span className={d.changeRate > 0 ? "up" : d.changeRate < 0 ? "down" : "flat"}>
+                        {(d.changeRate > 0 ? "+" : "") + Number(d.changeRate).toFixed(2)}%
+                      </span>
+                      <span>{compactVol(d.volume)}</span>
+                      <span>{eokAmount(d.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </>
         )}
@@ -262,12 +326,37 @@ function StockCard({ code, name, color }: { code: string; name: string; color: s
 
 export default function Home() {
   const [now, setNow] = useState("");
+  const [active, setActive] = useState(STOCKS[0].code);
+  const [quotes, setQuotes] = useState<any>({}); // { code: quoteData }
+
+  // 두 종목 현재가 5초마다 (상위 탭 표시 + 활성 카드용)
+  const loadQuotes = useCallback(async () => {
+    await Promise.all(
+      STOCKS.map(async (s) => {
+        try {
+          const r = await fetch(`/api/quote?code=${s.code}`);
+          const d = await r.json();
+          setQuotes((prev: any) => ({ ...prev, [s.code]: d }));
+        } catch {
+          setQuotes((prev: any) => ({ ...prev, [s.code]: { error: "네트워크 오류" } }));
+        }
+      })
+    );
+  }, []);
+  useEffect(() => {
+    loadQuotes();
+    const id = setInterval(loadQuotes, 5000);
+    return () => clearInterval(id);
+  }, [loadQuotes]);
+
   useEffect(() => {
     const tick = () => setNow(new Date().toLocaleTimeString("ko-KR"));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  const activeStock = STOCKS.find((s) => s.code === active) || STOCKS[0];
 
   return (
     <div className="wrap">
@@ -278,11 +367,39 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid">
-        {STOCKS.map((s) => (
-          <StockCard key={s.code} code={s.code} name={s.name} color={s.color} />
-        ))}
+      {/* 상위 종목 탭 (각 탭에 현재가·등락률 표시, 누르면 전환) */}
+      <div className="stock-tabs">
+        {STOCKS.map((s) => {
+          const q = quotes[s.code];
+          const ok = q && !q.error;
+          return (
+            <button
+              key={s.code}
+              className={"stock-tab" + (active === s.code ? " active" : "")}
+              onClick={() => setActive(s.code)}
+            >
+              <div className="st-name">{s.name} <span className="st-code">{s.code}</span></div>
+              {ok ? (
+                <div className="st-q">
+                  <span className="st-price">{won(q.price)}</span>
+                  <span className={"st-chg " + dirClass(q.dir)}>{arrow(q.dir)} {q.changeRate}%</span>
+                </div>
+              ) : (
+                <div className="st-q"><span className="st-price" style={{ color: "var(--muted)" }}>…</span></div>
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {/* 선택한 종목만 풀 카드 (key로 종목 전환 시 새로 마운트) */}
+      <StockCard
+        key={activeStock.code}
+        code={activeStock.code}
+        name={activeStock.name}
+        color={activeStock.color}
+        quote={quotes[activeStock.code]}
+      />
 
       <div className="foot">
         데이터: 한국투자증권 KIS Open API · 뉴스: Google News<br />
