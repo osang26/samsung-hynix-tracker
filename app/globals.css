@@ -123,6 +123,8 @@ a { color: inherit; text-decoration: none; }
 .dt-body { max-height: 264px; overflow-y: auto; }
 .dt-row { padding: 8px 6px; border-bottom: 1px solid rgba(0,0,0,0.05); }
 .dt-row span:nth-child(2) { font-weight: 700; color: var(--ink); }
+/* 재무 표(기간·매출·순이익) */
+.dt-head.fin3, .dt-row.fin3 { grid-template-columns: 1.3fr 1fr 1fr; }
 
 /* financials */
 .fin { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }

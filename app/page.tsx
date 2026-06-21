@@ -6,6 +6,8 @@ import {
   BarChart,
   Line,
   Bar,
+  Cell,
+  Legend,
   ResponsiveContainer,
   XAxis,
   YAxis,
@@ -90,6 +92,19 @@ function kDate(input: any): string {
   if (isNaN(dt.getTime())) return String(input);
   return `${dt.getFullYear()}.${dt.getMonth() + 1}.${dt.getDate()}. ${WD[dt.getDay()]}`;
 }
+function qLabel(p: string): string {
+  if (!p || p.length < 6) return p || "";
+  const q: Record<string, string> = { "03": "1Q", "06": "2Q", "09": "3Q", "12": "4Q" };
+  return p.slice(2, 4) + "." + (q[p.slice(4, 6)] || "?");
+}
+function yLabel(p: string): string {
+  return p && p.length >= 4 ? p.slice(0, 4) : p || "";
+}
+function eokAxis(v: any): string {
+  const n = Number(v) || 0;
+  if (Math.abs(n) >= 10000) return Math.round(n / 10000) + "조";
+  return Math.round(n) + "억";
+}
 
 function StockCard({ code, name, color, quote, tab, setTab }: { code: string; name: string; color: string; quote: any; tab: string; setTab: (t: string) => void }) {
   const qErr = quote && quote.error ? quote.error : "";
@@ -101,6 +116,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const [disclosure, setDisclosure] = useState<any>(null);
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
   const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
+  const [finMode, setFinMode] = useState("q"); // 재무: q(분기) | y(연간)
 
   // 메인 탭(차트/뉴스/재무)이 바뀌면 뉴스 서브탭은 '뉴스'로 초기화
   useEffect(() => {
@@ -141,6 +157,12 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     consensus && consensus.avgTarget && quote && quote.price
       ? ((consensus.avgTarget - quote.price) / quote.price) * 100
       : null;
+
+  // 재무: 표시 목록(분기/연간) + 현재 PER / 포워드 PER
+  const finList = fin && !fin.error ? (finMode === "q" ? fin.quarterly || [] : fin.annual || []) : [];
+  const finCap = quote && quote.marketCap ? quote.marketCap : null;
+  const trailPer = finCap && fin && fin.ttmNet ? finCap / fin.ttmNet : null;
+  const fwdPer = finCap && fin && fin.forwardNet ? finCap / fin.forwardNet : null;
 
   return (
     <div className="card">
@@ -327,44 +349,69 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
         )}
 
         {tab === "fin" &&
-          (fin && !fin.error ? (
-            <>
-              <div className="fin">
-                <div className="item"><div className="k">매출액</div><div className="v">{eok(fin.revenue)}</div></div>
-                <div className="item"><div className="k">영업이익</div><div className="v">{eok(fin.operatingProfit)}</div></div>
-                <div className="item"><div className="k">순이익</div><div className="v">{eok(fin.netIncome)}</div></div>
-              </div>
-              {fin.period && <div className="fin-note">연간 기준: {fmtPeriod(fin.period)}</div>}
-
-              {fin.quarters && fin.quarters.length > 0 && (
-                <div className="qbreak">
-                  <div className="qtitle">최근 4분기 순이익 (PER 계산에 사용)</div>
-                  {fin.quarters.map((q: any, i: number) => (
-                    <div className="qrow" key={i}>
-                      <span>{fmtQ(q.period)}</span>
-                      <span>{eok(q.netIncome)}</span>
-                    </div>
-                  ))}
-                  {ttmNet != null && (
-                    <div className="qrow qsum">
-                      <span>합계 (최근 1년)</span>
-                      <span>{eok(ttmNet)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {manualQ.length > 0 && (
-                <div className="fin-note">※ page.tsx의 직접 입력값으로 계산 중</div>
-              )}
-              {perCalc != null && (
-                <div className="fin-note">→ PER = 시가총액 ÷ 위 순이익 합 = {perText}</div>
-              )}
-            </>
-          ) : fin && fin.error ? (
+          (fin && fin.error ? (
             <div className="err">{fin.error}</div>
-          ) : (
+          ) : !fin ? (
             <div className="skeleton">재무 불러오는 중…</div>
+          ) : (
+            <>
+              <div className="subtabs">
+                <button className={"subtab" + (finMode === "q" ? " active" : "")} onClick={() => setFinMode("q")}>분기</button>
+                <button className={"subtab" + (finMode === "y" ? " active" : "")} onClick={() => setFinMode("y")}>연간</button>
+              </div>
+
+              <div className="chartbox" style={{ height: 196 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={finList.map((d: any) => ({ ...d, label: finMode === "q" ? qLabel(d.period) : yLabel(d.period) }))}
+                    margin={{ top: 8, right: 6, left: 6, bottom: 0 }}
+                    barCategoryGap="22%"
+                  >
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#7e8ca6" }} />
+                    <YAxis width={48} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={eokAxis} />
+                    <Tooltip
+                      formatter={(v: any, n: any) => [eok(v), n]}
+                      contentStyle={{ background: "#ffffff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434", boxShadow: "0 2px 10px rgba(20,40,80,0.12)" }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="revenue" name="매출" radius={[3, 3, 0, 0]}>
+                      {finList.map((d: any, i: number) => (
+                        <Cell key={i} fill={d.forecast ? "#cfe0ff" : "#3b6fe0"} stroke={d.forecast ? "#3b6fe0" : undefined} strokeWidth={d.forecast ? 1.4 : 0} strokeDasharray={d.forecast ? "4 3" : undefined} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="netIncome" name="순이익" radius={[3, 3, 0, 0]}>
+                      {finList.map((d: any, i: number) => (
+                        <Cell key={i} fill={d.forecast ? "#f6cfcc" : "#e5453b"} stroke={d.forecast ? "#e5453b" : undefined} strokeWidth={d.forecast ? 1.4 : 0} strokeDasharray={d.forecast ? "4 3" : undefined} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="fin-note">점선 막대 = 예측치(추정) · 실제 3 + 예측 1 · KIS 손익계산서</div>
+
+              <div className="dt-head fin3"><span>기간</span><span>매출</span><span>순이익</span></div>
+              <div className="dt-body">
+                {finList.map((d: any, i: number) => (
+                  <div className="dt-row fin3" key={i}>
+                    <span>{(finMode === "q" ? qLabel(d.period) : yLabel(d.period)) + (d.forecast ? " (예측)" : "")}</span>
+                    <span>{eok(d.revenue)}</span>
+                    <span>{eok(d.netIncome)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="sec">PER</div>
+              <div className="cons-top">
+                <div className="cons-cell">
+                  <div className="k">현재 PER <span className="sub">실적</span></div>
+                  <div className="v">{trailPer ? trailPer.toFixed(1) + "배" : "-"}</div>
+                </div>
+                <div className="cons-cell">
+                  <div className="k">포워드 PER <span className="sub">예측</span></div>
+                  <div className="v">{fwdPer ? fwdPer.toFixed(1) + "배" : "-"}</div>
+                </div>
+              </div>
+            </>
           ))}
       </div>
     </div>
