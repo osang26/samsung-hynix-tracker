@@ -125,6 +125,8 @@ a { color: inherit; text-decoration: none; }
 .cons-li-r { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
 .cons-tp { font-weight: 800; font-size: 13px; color: var(--ink); }
 .cons-dt { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.rpt-link { float: right; color: var(--accent); font-weight: 700; font-size: 11.5px; text-transform: none; letter-spacing: 0; }
+.rpt-link:hover { text-decoration: underline; }
 .cons-bar .seg { height: 100%; }
 .cons-bar .seg.up { background: var(--up); }
 .cons-bar .seg.flat { background: var(--flat); }
