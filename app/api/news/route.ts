@@ -22,7 +22,7 @@ async function fetchNews(q: string) {
   };
 
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)]
-    .slice(0, 6)
+    .slice(0, 30)
     .map((m) => {
       const block = m[1];
       return {

@@ -75,16 +75,37 @@ function pct52(price: number, low: number, high: number): number {
   if (!(high > low)) return 50;
   return Math.max(0, Math.min(100, ((price - low) / (high - low)) * 100));
 }
+// 한국식 날짜: 2026.6.21. 일  (YYYYMMDD 문자열·RSS 날짜·Date 모두 처리)
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
+function kDate(input: any): string {
+  if (input === null || input === undefined || input === "") return "";
+  let dt: Date;
+  if (input instanceof Date) dt = input;
+  else {
+    const s = String(input).trim();
+    dt = /^\d{8}$/.test(s)
+      ? new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8))
+      : new Date(s);
+  }
+  if (isNaN(dt.getTime())) return String(input);
+  return `${dt.getFullYear()}.${dt.getMonth() + 1}.${dt.getDate()}. ${WD[dt.getDay()]}`;
+}
 
-function StockCard({ code, name, color, quote }: { code: string; name: string; color: string; quote: any }) {
+function StockCard({ code, name, color, quote, tab, setTab }: { code: string; name: string; color: string; quote: any; tab: string; setTab: (t: string) => void }) {
   const qErr = quote && quote.error ? quote.error : "";
   const [chart, setChart] = useState<any>(null);
   const [fin, setFin] = useState<any>(null);
   const [news, setNews] = useState<any>(null);
   const [daily, setDaily] = useState<any>(null);
   const [consensus, setConsensus] = useState<any>(null);
-  const [tab, setTab] = useState("chart"); // chart | news | fin
+  const [disclosure, setDisclosure] = useState<any>(null);
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
+  const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
+
+  // 메인 탭(차트/뉴스/재무)이 바뀌면 뉴스 서브탭은 '뉴스'로 초기화
+  useEffect(() => {
+    setNewsTab("news");
+  }, [tab]);
 
   // 재무 / 뉴스: 1회
   useEffect(() => {
@@ -92,6 +113,7 @@ function StockCard({ code, name, color, quote }: { code: string; name: string; c
     fetch(`/api/news?q=${encodeURIComponent(name)}`).then((r) => r.json()).then(setNews).catch(() => setNews({ error: "뉴스 오류" }));
     fetch(`/api/daily?code=${code}`).then((r) => r.json()).then(setDaily).catch(() => setDaily({ error: "일별시세 오류" }));
     fetch(`/api/consensus?code=${code}`).then((r) => r.json()).then(setConsensus).catch(() => setConsensus(null));
+    fetch(`/api/disclosure?code=${code}`).then((r) => r.json()).then(setDisclosure).catch(() => setDisclosure(null));
   }, [code, name]);
 
   // 차트: 기간(range)이 바뀔 때마다 다시 받아옴
@@ -263,21 +285,46 @@ function StockCard({ code, name, color, quote }: { code: string; name: string; c
           </>
         )}
 
-        {tab === "news" &&
-          (news && news.items && news.items.length > 0 ? (
-            <ul className="news">
-              {news.items.map((it: any, i: number) => (
-                <li key={i}>
-                  <a href={it.link} target="_blank" rel="noreferrer">{it.title}</a>
-                  <div className="date">{it.source ? it.source + " · " : ""}{it.pubDate}</div>
-                </li>
-              ))}
-            </ul>
-          ) : news && news.error ? (
-            <div className="err">{news.error}</div>
-          ) : (
-            <div className="skeleton">뉴스 불러오는 중…</div>
-          ))}
+        {tab === "news" && (
+          <>
+            <div className="subtabs">
+              <button className={"subtab" + (newsTab === "news" ? " active" : "")} onClick={() => setNewsTab("news")}>📰 뉴스</button>
+              <button className={"subtab" + (newsTab === "disc" ? " active" : "")} onClick={() => setNewsTab("disc")}>📋 공시</button>
+            </div>
+
+            {newsTab === "news" ? (
+              news && news.items && news.items.length > 0 ? (
+                <ul className="news">
+                  {news.items.map((it: any, i: number) => (
+                    <li key={i}>
+                      <a href={it.link} target="_blank" rel="noreferrer">{it.title}</a>
+                      <div className="date">{it.source ? it.source + " · " : ""}{kDate(it.pubDate)}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : news && news.error ? (
+                <div className="err">{news.error}</div>
+              ) : (
+                <div className="skeleton">뉴스 불러오는 중…</div>
+              )
+            ) : disclosure && disclosure.items && disclosure.items.length > 0 ? (
+              <ul className="news">
+                {disclosure.items.map((d: any, i: number) => (
+                  <li key={i}>
+                    <a href={d.url} target="_blank" rel="noreferrer">{d.title}</a>
+                    <div className="date">{d.filer ? d.filer + " · " : ""}{kDate(d.date)}</div>
+                  </li>
+                ))}
+              </ul>
+            ) : disclosure && disclosure.enabled === false ? (
+              <div className="fin-note">공시를 보려면 DART API 키가 필요해요. (opendart.fss.or.kr 무료 발급 → 환경변수 DART_API_KEY)</div>
+            ) : disclosure && disclosure.items ? (
+              <div className="fin-note">최근 3개월 공시가 없습니다.</div>
+            ) : (
+              <div className="skeleton">공시 불러오는 중…</div>
+            )}
+          </>
+        )}
 
         {tab === "fin" &&
           (fin && !fin.error ? (
@@ -328,6 +375,7 @@ export default function Home() {
   const [now, setNow] = useState("");
   const [active, setActive] = useState(STOCKS[0].code);
   const [quotes, setQuotes] = useState<any>({}); // { code: quoteData }
+  const [tab, setTab] = useState("chart"); // 서브탭(차트/뉴스/재무) — 종목 바꿔도 유지
 
   // 두 종목 현재가 5초마다 (상위 탭 표시 + 활성 카드용)
   const loadQuotes = useCallback(async () => {
@@ -350,7 +398,10 @@ export default function Home() {
   }, [loadQuotes]);
 
   useEffect(() => {
-    const tick = () => setNow(new Date().toLocaleTimeString("ko-KR"));
+    const tick = () => {
+      const d = new Date();
+      setNow(`${kDate(d)} ${d.toLocaleTimeString("ko-KR")}`);
+    };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -399,6 +450,8 @@ export default function Home() {
         name={activeStock.name}
         color={activeStock.color}
         quote={quotes[activeStock.code]}
+        tab={tab}
+        setTab={setTab}
       />
 
       <div className="foot">

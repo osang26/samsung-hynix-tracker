@@ -7,9 +7,9 @@ const APP_KEY = process.env.KIS_APP_KEY || "";
 const APP_SECRET = process.env.KIS_APP_SECRET || "";
 
 // 우리가 다루는 종목
-export const STOCKS: Record<string, { name: string }> = {
-  "005930": { name: "삼성전자" },
-  "000660": { name: "SK하이닉스" },
+export const STOCKS: Record<string, { name: string; corp?: string }> = {
+  "005930": { name: "삼성전자", corp: "00126380" },   // corp = DART 고유번호(공시용)
+  "000660": { name: "SK하이닉스", corp: "00164779" },
 };
 
 // 접근토큰은 24시간 유효 → 재사용. 서버리스(Vercel)에선 요청마다 인스턴스가 따로라
