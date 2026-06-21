@@ -126,6 +126,16 @@ a { color: inherit; text-decoration: none; }
 /* 재무 표(기간·매출·순이익) */
 .dt-head.fin3, .dt-row.fin3 { grid-template-columns: 1.3fr 1fr 1fr; }
 
+/* 재무 표(가로형: 행=항목, 열=기간) */
+.tfin { margin-top: 4px; }
+.tfin-row { display: grid; gap: 6px; align-items: center; padding: 9px 6px; border-bottom: 1px solid rgba(0,0,0,0.05); font-size: 12.5px; }
+.tfin-row > span:first-child { color: var(--muted); font-weight: 700; text-align: left; }
+.tfin-row > span:not(:first-child) { text-align: right; font-weight: 700; color: var(--ink); }
+.tfin-row.head { border-bottom: 1px solid var(--line); }
+.tfin-row.head > span { color: var(--muted); font-weight: 700; }
+.tfin-row.head > span.fc, .tfin-row > span.fc { color: var(--accent); }
+.fc-tag { font-size: 10px; font-weight: 600; }
+
 /* financials */
 .fin { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .fin .item { background: var(--tint); border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; }

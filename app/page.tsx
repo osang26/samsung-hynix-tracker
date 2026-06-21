@@ -397,15 +397,30 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
               </div>
               <div className="fin-note">점선 막대 = 예측치(추정) · 실제 3 + 예측 1 · KIS 손익계산서</div>
 
-              <div className="dt-head fin3"><span>기간</span><span>매출</span><span>순이익</span></div>
-              <div className="dt-body">
-                {finList.map((d: any, i: number) => (
-                  <div className="dt-row fin3" key={i}>
-                    <span>{(finMode === "q" ? qLabel(d.period) : yLabel(d.period)) + (d.forecast ? " (예측)" : "")}</span>
-                    <span>{eok(d.revenue)}</span>
-                    <span>{eok(d.netIncome)}</span>
-                  </div>
-                ))}
+              <div className="tfin">
+                <div className="tfin-row head" style={{ gridTemplateColumns: `0.8fr repeat(${finList.length}, 1fr)` }}>
+                  <span>구분</span>
+                  {finList.map((d: any, i: number) => {
+                    const lbl = finMode === "q" ? qLabel(d.period) : yLabel(d.period);
+                    return (
+                      <span key={i} className={d.forecast ? "fc" : ""}>
+                        {lbl}{d.forecast && <><br /><small className="fc-tag">예측</small></>}
+                      </span>
+                    );
+                  })}
+                </div>
+                <div className="tfin-row" style={{ gridTemplateColumns: `0.8fr repeat(${finList.length}, 1fr)` }}>
+                  <span>매출</span>
+                  {finList.map((d: any, i: number) => (
+                    <span key={i} className={d.forecast ? "fc" : ""}>{eok(d.revenue)}</span>
+                  ))}
+                </div>
+                <div className="tfin-row" style={{ gridTemplateColumns: `0.8fr repeat(${finList.length}, 1fr)` }}>
+                  <span>순이익</span>
+                  {finList.map((d: any, i: number) => (
+                    <span key={i} className={d.forecast ? "fc" : ""}>{eok(d.netIncome)}</span>
+                  ))}
+                </div>
               </div>
 
               <div className="sec">PER</div>
