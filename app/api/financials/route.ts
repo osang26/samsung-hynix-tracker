@@ -60,6 +60,26 @@ function nextYear(yymm: string): string {
   return `${+yymm.slice(0, 4) + 1}12`;
 }
 
+// KIS 분기 손익계산서는 '누적(YTD)'으로 온다(예: Q4 = 연간 누적).
+// 같은 연도의 직전 분기 누적을 빼서 '당기(그 분기만)' 값으로 변환한다.
+function deCumulate(
+  rows: { period: string; revenue: number | null; netIncome: number | null }[]
+) {
+  return rows.map((cur, i) => {
+    const prev = i > 0 ? rows[i - 1] : null;
+    const isQ1 = cur.period.slice(4, 6) === "03";
+    const sameYear = prev && prev.period.slice(0, 4) === cur.period.slice(0, 4);
+    if (isQ1 || !sameYear || !prev) return { ...cur }; // Q1(또는 직전 분기 없음)은 누적=당기
+    const sub = (a: number | null, b: number | null) =>
+      a != null && b != null ? a - b : a;
+    return {
+      period: cur.period,
+      revenue: sub(cur.revenue, prev.revenue),
+      netIncome: sub(cur.netIncome, prev.netIncome),
+    };
+  });
+}
+
 async function fetchFinancials(code: string) {
   const base = { FID_COND_MRKT_DIV_CODE: "J", FID_INPUT_ISCD: code };
   const [annualRes, quarterRes] = await Promise.all([
@@ -77,8 +97,9 @@ async function fetchFinancials(code: string) {
       .filter((x) => x.period);
 
   // KIS는 최신순 → 과거순으로 뒤집기
-  const qRows = parse(quarterRes.output).reverse(); // oldest..newest
   const aRows = parse(annualRes.output).reverse();
+  // 분기 손익은 누적(YTD)이라 Q4가 연간처럼 부풀려짐 → 당기(그 분기만)로 변환
+  const qRows = deCumulate(parse(quarterRes.output).reverse());
 
   const qActual = qRows.slice(-3); // 최근 3분기 실제
   // 연간 실제는 '완료된 연도'만 (현재연도=올해는 1분기까지만 누적이라 실제가 아니라 예측 대상)
@@ -138,7 +159,7 @@ export async function GET(req: Request) {
   const code = sp.get("code") || "005930";
   const force = sp.get("force") === "1";
 
-  const key = `fin4:${code}`;
+  const key = `fin5:${code}`;
   if (!force) {
     const cached = await storeGet(key);
     if (cached) return NextResponse.json(cached);
