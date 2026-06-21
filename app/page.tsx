@@ -117,6 +117,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const [news, setNews] = useState<any>(null);
   const [daily, setDaily] = useState<any>(null);
   const [consensus, setConsensus] = useState<any>(null);
+  const [consOpen, setConsOpen] = useState(false); // 증권사별 목록 펼침
   const [disclosure, setDisclosure] = useState<any>(null);
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
   const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
@@ -288,6 +289,35 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
                   {consensus.hold > 0 && <div className="seg flat" style={{ flexGrow: consensus.hold }} />}
                   {consensus.sell > 0 && <div className="seg down" style={{ flexGrow: consensus.sell }} />}
                 </div>
+
+                {consensus.items && consensus.items.length > 0 && (
+                  <>
+                    <button className="cons-toggle" onClick={() => setConsOpen((v) => !v)}>
+                      증권사별 목표가 · 최신순 {consOpen ? "▴" : "▾"}
+                    </button>
+                    {consOpen && (
+                      <div className="cons-list">
+                        {consensus.items.map((it: any, i: number) => {
+                          const d = String(it.date || "");
+                          const dstr = d.length === 8 ? `${d.slice(2, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
+                          const oc = it.opinionClass === "buy" ? "up" : it.opinionClass === "sell" ? "down" : "flat";
+                          return (
+                            <div className="cons-li" key={i}>
+                              <div className="cons-li-l">
+                                <span className="cons-firm">{it.broker || "-"}</span>
+                                {it.opinion && <span className={"cons-op " + oc}>{it.opinion}</span>}
+                              </div>
+                              <div className="cons-li-r">
+                                <span className="cons-tp">{it.target ? won(it.target) : "-"}</span>
+                                <span className="cons-dt">{dstr}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 

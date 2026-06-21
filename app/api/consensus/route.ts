@@ -62,6 +62,17 @@ async function fetchConsensus(code: string) {
     }
   }
 
+  // 증권사별 상세 목록(최신순) — 클릭 시 펼쳐서 보여줌
+  const items = recs
+    .map((r) => ({
+      date: String(r.stck_bsop_date || ""),       // YYYYMMDD
+      broker: String(r.mbcr_name || "").trim(),    // 증권사명
+      opinion: String(r.invt_opnn || "").trim(),   // 투자의견
+      opinionClass: classify(String(r.invt_opnn || "")),
+      target: num(r.hts_goal_prc) || null,         // 목표주가
+    }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
   return {
     code,
     count: recs.length,
@@ -69,6 +80,7 @@ async function fetchConsensus(code: string) {
     hold,
     sell,
     avgTarget: cnt > 0 ? Math.round(sum / cnt) : null,
+    items,
   };
 }
 
@@ -77,7 +89,7 @@ export async function GET(req: Request) {
   const code = sp.get("code") || "005930";
   const force = sp.get("force") === "1";
 
-  const key = `consensus:${code}`;
+  const key = `cons2:${code}`;
   if (!force) {
     const cached = await storeGet(key);
     if (cached) return NextResponse.json(cached);
@@ -88,6 +100,6 @@ export async function GET(req: Request) {
     return NextResponse.json(result);
   } catch (e: any) {
     // 실패해도 화면은 빈 상태로 처리되게
-    return NextResponse.json({ code, count: 0, buy: 0, hold: 0, sell: 0, avgTarget: null, error: e.message });
+    return NextResponse.json({ code, count: 0, buy: 0, hold: 0, sell: 0, avgTarget: null, items: [], error: e.message });
   }
 }
