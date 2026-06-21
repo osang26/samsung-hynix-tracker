@@ -13,6 +13,7 @@ import {
   YAxis,
   Tooltip,
 } from "recharts";
+import { INSIGHTS } from "@/lib/insights";
 
 const STOCKS = [
   { code: "005930", name: "삼성전자", color: "#4f8cff" },
@@ -164,6 +165,9 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const trailPer = finCap && fin && fin.ttmNet ? finCap / fin.ttmNet : null;
   const fwdPer = finCap && fin && fin.forwardNet ? finCap / fin.forwardNet : null;
 
+  // 투자포인트(정적): 요약 + 강세/약세 + 사업부문
+  const insight = INSIGHTS[code];
+
   return (
     <div className="card">
       <div className="top">
@@ -194,6 +198,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
         <button className={"tab-btn" + (tab === "chart" ? " active" : "")} onClick={() => setTab("chart")}>차트</button>
         <button className={"tab-btn" + (tab === "news" ? " active" : "")} onClick={() => setTab("news")}>뉴스</button>
         <button className={"tab-btn" + (tab === "fin" ? " active" : "")} onClick={() => setTab("fin")}>재무</button>
+        <button className={"tab-btn" + (tab === "tip" ? " active" : "")} onClick={() => setTab("tip")}>투자포인트</button>
       </div>
 
       <div className="tab-panel">
@@ -374,12 +379,12 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
                       contentStyle={{ background: "#ffffff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434", boxShadow: "0 2px 10px rgba(20,40,80,0.12)" }}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="revenue" name="매출" radius={[3, 3, 0, 0]}>
+                    <Bar dataKey="revenue" name="매출" fill="#3b6fe0" radius={[3, 3, 0, 0]}>
                       {finList.map((d: any, i: number) => (
                         <Cell key={i} fill={d.forecast ? "#cfe0ff" : "#3b6fe0"} stroke={d.forecast ? "#3b6fe0" : undefined} strokeWidth={d.forecast ? 1.4 : 0} strokeDasharray={d.forecast ? "4 3" : undefined} />
                       ))}
                     </Bar>
-                    <Bar dataKey="netIncome" name="순이익" radius={[3, 3, 0, 0]}>
+                    <Bar dataKey="netIncome" name="순이익" fill="#e5453b" radius={[3, 3, 0, 0]}>
                       {finList.map((d: any, i: number) => (
                         <Cell key={i} fill={d.forecast ? "#f6cfcc" : "#e5453b"} stroke={d.forecast ? "#e5453b" : undefined} strokeWidth={d.forecast ? 1.4 : 0} strokeDasharray={d.forecast ? "4 3" : undefined} />
                       ))}
@@ -413,6 +418,39 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
               </div>
             </>
           ))}
+
+        {tab === "tip" && insight && (
+          <>
+            <div className="tip-summary">{insight.summary}</div>
+
+            <div className="sec">사업부문 구성 <span className="sub">{insight.segNote}</span></div>
+            <div className="segs">
+              {insight.segments.map((s: any, i: number) => (
+                <div className="seg-row" key={i}>
+                  <div className="seg-top">
+                    <span className="seg-name">{s.label}{s.note && <span className="seg-note">{s.note}</span>}</span>
+                    <span className="seg-pct">{s.pct}%</span>
+                  </div>
+                  <div className="seg-track"><div className="seg-fill" style={{ width: s.pct + "%" }} /></div>
+                </div>
+              ))}
+            </div>
+
+            <div className="sec">투자 포인트</div>
+            <div className="bullbear">
+              <div className="bb">
+                <div className="bb-h up">▲ 강세 (Bull)</div>
+                <ul>{insight.bull.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
+              </div>
+              <div className="bb">
+                <div className="bb-h down">▼ 약세 (Bear)</div>
+                <ul>{insight.bear.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
+              </div>
+            </div>
+            <div className="fin-note">첨부 투자분석보고서(증권사 컨센서스 등) 요약 · 투자 권유 아님</div>
+          </>
+        )}
+        {tab === "tip" && !insight && <div className="muted">자료 준비 중입니다.</div>}
       </div>
     </div>
   );
