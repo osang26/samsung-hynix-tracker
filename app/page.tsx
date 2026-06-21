@@ -29,6 +29,9 @@ const QUARTERLY_NET_INCOME: Record<string, number[]> = {
   "000660": [],
 };
 
+// 사업부문 스택 막대 색(진한→옅은 파랑)
+const SEG_COLORS = ["#3b6fe0", "#86a8ef", "#c2d4f7", "#dde7fa"];
+
 // ---- 표시 형식 헬퍼 ----
 function won(n: any): string {
   return Number(n || 0).toLocaleString("ko-KR") + "원";
@@ -421,29 +424,38 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
 
         {tab === "tip" && insight && (
           <>
-            <div className="tip-summary">{insight.summary}</div>
+            <div className="tip-hero">
+              <span className="tip-hero-label">핵심 한 줄</span>
+              <div className="tip-hero-text">{insight.summary}</div>
+            </div>
 
             <div className="sec">사업부문 구성 <span className="sub">{insight.segNote}</span></div>
-            <div className="segs">
+            <div className="segbar">
               {insight.segments.map((s: any, i: number) => (
-                <div className="seg-row" key={i}>
-                  <div className="seg-top">
-                    <span className="seg-name">{s.label}{s.note && <span className="seg-note">{s.note}</span>}</span>
-                    <span className="seg-pct">{s.pct}%</span>
-                  </div>
-                  <div className="seg-track"><div className="seg-fill" style={{ width: s.pct + "%" }} /></div>
+                <div key={i} className="segbar-part" style={{ width: s.pct + "%", background: SEG_COLORS[i % SEG_COLORS.length] }}>
+                  {s.pct >= 15 ? s.pct + "%" : ""}
+                </div>
+              ))}
+            </div>
+            <div className="seg-legend">
+              {insight.segments.map((s: any, i: number) => (
+                <div className="seg-leg" key={i}>
+                  <span className="seg-dot" style={{ background: SEG_COLORS[i % SEG_COLORS.length] }} />
+                  <span className="seg-leg-name">{s.label}</span>
+                  <span className="seg-leg-pct">{s.pct}%</span>
+                  {s.note && <span className="seg-note">· {s.note}</span>}
                 </div>
               ))}
             </div>
 
             <div className="sec">투자 포인트</div>
             <div className="bullbear">
-              <div className="bb">
-                <div className="bb-h up">▲ 강세 (Bull)</div>
+              <div className="bb bb-bull">
+                <div className="bb-head"><span className="bb-ico">📈</span><span className="bb-title">강세 · Bull</span><span className="bb-cnt">{insight.bull.length}</span></div>
                 <ul>{insight.bull.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
               </div>
-              <div className="bb">
-                <div className="bb-h down">▼ 약세 (Bear)</div>
+              <div className="bb bb-bear">
+                <div className="bb-head"><span className="bb-ico">📉</span><span className="bb-title">약세 · Bear</span><span className="bb-cnt">{insight.bear.length}</span></div>
                 <ul>{insight.bear.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
               </div>
             </div>

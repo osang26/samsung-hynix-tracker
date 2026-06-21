@@ -141,20 +141,35 @@ a { color: inherit; text-decoration: none; }
 .qrow.qsum { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; color: var(--accent); }
 
 /* 투자포인트 */
-.tip-summary { font-size: 13px; line-height: 1.7; color: var(--ink); background: var(--tint); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 4px 0 2px; }
-.segs { display: flex; flex-direction: column; gap: 11px; margin: 4px 2px 2px; }
-.seg-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 5px; }
-.seg-name { font-weight: 700; color: var(--ink); }
-.seg-note { color: var(--muted); font-weight: 600; font-size: 11.5px; margin-left: 6px; }
-.seg-pct { font-weight: 800; color: var(--accent); font-size: 13px; }
-.seg-track { height: 9px; background: #eef1f6; border-radius: 999px; overflow: hidden; }
-.seg-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #6f97ee); border-radius: 999px; }
-.bullbear { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 520px){ .bullbear { grid-template-columns: 1fr; } }
-.bb { background: var(--tint); border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px; }
-.bb-h { font-size: 13px; font-weight: 800; margin-bottom: 4px; }
-.bb ul { margin: 0; padding-left: 17px; }
-.bb li { font-size: 12.5px; line-height: 1.5; margin: 6px 0; color: var(--ink); }
+.tip-hero { position: relative; background: linear-gradient(135deg, #eef4ff, #ffffff 62%); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 14px; padding: 13px 16px 14px; margin: 4px 0 2px; box-shadow: var(--shadow); }
+.tip-hero-label { display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .04em; color: var(--accent); background: #e4ecff; border-radius: 999px; padding: 3px 10px; margin-bottom: 8px; }
+.tip-hero-text { font-size: 13.5px; line-height: 1.72; color: var(--ink); font-weight: 500; }
+
+/* 사업부문 스택 막대 */
+.segbar { display: flex; height: 30px; border-radius: 9px; overflow: hidden; margin: 4px 0 11px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04); }
+.segbar-part { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 800; white-space: nowrap; transition: width .45s ease; }
+.seg-legend { display: flex; flex-direction: column; gap: 8px; margin: 2px 2px 4px; }
+.seg-leg { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.seg-dot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.seg-leg-name { font-weight: 700; color: var(--ink); }
+.seg-leg-pct { font-weight: 800; color: var(--accent); }
+.seg-note { color: var(--muted); font-weight: 600; font-size: 11.5px; }
+
+/* 강세/약세 카드 */
+.bullbear { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; margin-top: 2px; }
+@media (max-width: 540px){ .bullbear { grid-template-columns: 1fr; } }
+.bb { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); }
+.bb-head { display: flex; align-items: center; gap: 7px; padding: 9px 13px; color: #fff; font-weight: 800; }
+.bb-bull .bb-head { background: linear-gradient(135deg, #e5453b, #f57c70); }
+.bb-bear .bb-head { background: linear-gradient(135deg, #2f6bdb, #5f97f0); }
+.bb-ico { font-size: 14px; }
+.bb-title { font-size: 13px; letter-spacing: .01em; }
+.bb-cnt { margin-left: auto; background: rgba(255,255,255,0.28); border-radius: 999px; min-width: 21px; height: 21px; display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 800; padding: 0 6px; }
+.bb ul { margin: 0; padding: 9px 13px 12px; list-style: none; }
+.bb li { position: relative; font-size: 12.5px; line-height: 1.5; padding-left: 15px; margin: 9px 0; color: var(--ink); }
+.bb li::before { content: ""; position: absolute; left: 1px; top: 7px; width: 6px; height: 6px; border-radius: 50%; }
+.bb-bull li::before { background: var(--up); }
+.bb-bear li::before { background: var(--down); }
 
 /* news */
 .news { list-style: none; padding: 0; margin: 0; }
