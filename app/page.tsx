@@ -87,10 +87,10 @@ function StockCard({ code, name, color }: { code: string; name: string; color: s
     }
   }, [code]);
 
-  // 현재가: 즉시 + 30초마다
+  // 현재가: 즉시 + 5초마다
   useEffect(() => {
     loadQuote();
-    const id = setInterval(loadQuote, 30000);
+    const id = setInterval(loadQuote, 5000);
     return () => clearInterval(id);
   }, [loadQuote]);
 
@@ -265,7 +265,7 @@ export default function Home() {
   useEffect(() => {
     const tick = () => setNow(new Date().toLocaleTimeString("ko-KR"));
     tick();
-    const id = setInterval(tick, 30000);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -274,7 +274,7 @@ export default function Home() {
       <div className="header">
         <h1>📈 <span>삼성전자</span> · <span>SK하이닉스</span> 트래커</h1>
         <div className="meta">
-          <span className="refresh-dot" />30초마다 자동 갱신 · {now}
+          <span className="refresh-dot" />5초마다 자동 갱신 · {now}
         </div>
       </div>
 
