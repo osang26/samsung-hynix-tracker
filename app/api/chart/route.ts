@@ -50,7 +50,7 @@ function minus1min(hms: string): string | null {
 //  날짜 경계를 넘어 계속 거슬러 가되, 더 과거가 안 나오면 멈춘다(best-effort, graceful).
 const SESSION_MIN = 720; // 08:00~20:00 = 12시간(1분봉 720개)
 
-async function intraday(code: string) {
+async function intradayRaw(code: string) {
   const seen = new Set<string>();
   const bars: { d: string; t: string; close: number; volume: number }[] = [];
   let hour = "200000"; // 애프터마켓 마감(20:00)부터 거슬러 올라감
@@ -89,15 +89,35 @@ async function intraday(code: string) {
     hour = next; // 08:00 밑으로도 계속 → 전 거래일 꼬리를 시도
   }
 
-  // 날짜+시각 순으로 정렬 후, 최근 12시간치(720개)만
   bars.sort((a, b) => (a.d + a.t < b.d + b.t ? -1 : 1));
-  return bars.slice(-SESSION_MIN).map((b) => ({ label: hm(b.t), close: b.close, volume: b.volume }));
+  return bars; // 원자료(당일 + KIS가 주는 만큼)
+}
+
+// 저장소에 분봉을 누적 병합 → 최근 12시간치(720개)를 반환한다.
+//  배포(Upstash): 어제 저장분 + 오늘 실시간이 이어져 '누적 12시간'.
+//  로컬(저장소 없음): storeGet/Set이 no-op이라 당일치만 보인다(graceful).
+async function mergeIntraday(
+  code: string,
+  todays: { d: string; t: string; close: number; volume: number }[]
+) {
+  const KEY = `imin:${code}`;
+  const stored = (await storeGet<any[]>(KEY)) || [];
+  const map = new Map<string, { d: string; t: string; close: number; volume: number }>();
+  for (const b of stored) if (b && b.d && b.t) map.set(b.d + b.t, b);
+  for (const b of todays) map.set(b.d + b.t, b); // 오늘 최신값으로 덮어쓰기
+  let all = [...map.values()];
+  all.sort((a, b) => (a.d + a.t < b.d + b.t ? -1 : 1));
+  if (all.length > 1500) all = all.slice(-1500); // 최근 ~2거래일치만 보관
+  await storeSet(KEY, all, 4 * 24 * 3600); // 4일 보관
+  return all.slice(-SESSION_MIN);
 }
 
 async function fetchChart(code: string, range: Range) {
   const cfg = CFG[range];
   if (range === "1D") {
-    const series = await intraday(code);
+    const todays = await intradayRaw(code);
+    const merged = await mergeIntraday(code, todays); // 저장소에 누적 병합
+    const series = merged.map((b) => ({ label: hm(b.t), close: b.close, volume: b.volume }));
     return { code, range, candle: cfg.candle, series };
   }
   const end = new Date();

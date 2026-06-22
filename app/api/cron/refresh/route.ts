@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { STOCKS } from "@/lib/kis";
 
-// 크론: 저장소를 미리 채운다(차트 1주~1년·재무·뉴스). 각 라우트를 force=1로 호출 → 새로 받아 저장.
-// 1일(분봉)은 장중에 계속 바뀌므로 크론 대신 '읽을 때 캐시'(60초)로 처리한다.
+// 크론: 저장소를 미리 채운다(차트 1일~1년·재무·뉴스). 각 라우트를 force=1로 호출 → 새로 받아 저장.
+// 1일(분봉)도 호출해 '그날 세션'을 분봉 버퍼에 스냅샷으로 쌓는다(다음 날 누적 12시간용).
+//  → 장 마감 후(20:00 KST 부근)에 도는 크론이면 그날 전체 세션이 통째로 저장된다.
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
 
   const base = baseUrl(req);
   const codes = Object.keys(STOCKS);
-  const ranges = ["1W", "1M", "3M", "1Y"]; // 1D(분봉)은 읽을 때 캐시로 처리
+  const ranges = ["1D", "1W", "1M", "3M", "1Y"]; // 1D = 분봉 버퍼에 당일 세션 스냅샷(누적용)
   const results: string[] = [];
 
   const hit = async (label: string, url: string) => {
