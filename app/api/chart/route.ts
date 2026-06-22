@@ -44,13 +44,19 @@ function minus1min(hms: string): string | null {
   return hh + mm + ss;
 }
 
-// 1일: 통합시세(UN) 분봉을 20:00부터 08:00까지 거슬러 호출하며 하루치를 모은다.
+// 1일: 통합시세(UN) 분봉을 거슬러 호출해 '최근 약 12시간치' 데이터를 모은다.
+//  - 폐장 후: 직전 세션(08:00~20:00, 12시간)이 그대로 잡힌다.
+//  - 장중: 당일 데이터 + (KIS가 주는 만큼) 전 거래일 저녁 꼬리를 이어 붙여 12시간을 채운다.
+//  날짜 경계를 넘어 계속 거슬러 가되, 더 과거가 안 나오면 멈춘다(best-effort, graceful).
+const SESSION_MIN = 720; // 08:00~20:00 = 12시간(1분봉 720개)
+
 async function intraday(code: string) {
-  const all: any[] = [];
-  let hour = "200000"; // NXT 애프터마켓 마감(20:00)부터 거슬러 올라감
-  let sessionDate = "";
-  let prevEarliest = "";
-  for (let i = 0; i < 30; i++) {
+  const seen = new Set<string>();
+  const bars: { d: string; t: string; close: number; volume: number }[] = [];
+  let hour = "200000"; // 애프터마켓 마감(20:00)부터 거슬러 올라감
+  let prevMarker = "";
+
+  for (let i = 0; i < 24; i++) {
     const data = await kisGet(
       "/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice",
       "FHKST03010200",
@@ -64,30 +70,28 @@ async function intraday(code: string) {
     );
     const rows: any[] = data.output2 || [];
     if (rows.length === 0) break;
-    if (!sessionDate) sessionDate = String(rows[0].stck_bsop_date || "");
-    all.push(...rows);
-    const earliest = String(rows[rows.length - 1].stck_cntg_hour || "");
-    if (!earliest || earliest === prevEarliest) break;
-    prevEarliest = earliest;
-    if (earliest <= "080100") break;
-    const next = minus1min(earliest);
-    if (!next || next < "080000") break;
-    hour = next;
+    for (const r of rows) {
+      const d = String(r.stck_bsop_date || "");
+      const t = String(r.stck_cntg_hour || "");
+      if (!d || !t || t < "080000" || t > "200000") continue; // 08:00~20:00만
+      const k = d + t;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      bars.push({ d, t, close: num(r.stck_prpr), volume: num(r.cntg_vol) });
+    }
+    if (bars.length >= SESSION_MIN + 30) break; // 12시간치 충분히 모음
+    const last = rows[rows.length - 1];
+    const marker = String(last.stck_bsop_date || "") + String(last.stck_cntg_hour || "");
+    if (marker === prevMarker) break; // 더 과거 데이터가 안 나오면 중단
+    prevMarker = marker;
+    const next = minus1min(String(last.stck_cntg_hour || ""));
+    if (!next) break;
+    hour = next; // 08:00 밑으로도 계속 → 전 거래일 꼬리를 시도
   }
 
-  const seen = new Set<string>();
-  const bars: { label: string; close: number; volume: number; t: string }[] = [];
-  for (const r of all) {
-    const d = String(r.stck_bsop_date || "");
-    const t = String(r.stck_cntg_hour || "");
-    if (sessionDate && d !== sessionDate) continue;
-    if (!t || seen.has(t)) continue;
-    if (t < "080000" || t > "200000") continue;
-    seen.add(t);
-    bars.push({ label: hm(t), close: num(r.stck_prpr), volume: num(r.cntg_vol), t });
-  }
-  bars.sort((a, b) => (a.t < b.t ? -1 : 1));
-  return bars.map(({ label, close, volume }) => ({ label, close, volume }));
+  // 날짜+시각 순으로 정렬 후, 최근 12시간치(720개)만
+  bars.sort((a, b) => (a.d + a.t < b.d + b.t ? -1 : 1));
+  return bars.slice(-SESSION_MIN).map((b) => ({ label: hm(b.t), close: b.close, volume: b.volume }));
 }
 
 async function fetchChart(code: string, range: Range) {
@@ -131,7 +135,7 @@ export async function GET(req: Request) {
   const force = sp.get("force") === "1";
   if (!CFG[range]) return NextResponse.json({ error: "잘못된 기간" }, { status: 400 });
 
-  const key = `chart:${code}:${range}`;
+  const key = `chart2:${code}:${range}`;
   if (!force) {
     const cached = await storeGet(key);
     if (cached) return NextResponse.json(cached);
