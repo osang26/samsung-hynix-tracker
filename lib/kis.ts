@@ -1,6 +1,6 @@
 // KIS Open API 공용 헬퍼 (토큰 발급/캐시 + GET 호출)
 // 앱키/시크릿은 .env.local 에서 읽습니다. (코드에 직접 적지 않기!)
-import { storeGet, storeSet } from "./store";
+import { storeGet, storeSet, storeDel } from "./store";
 
 const BASE = process.env.KIS_BASE || "https://openapi.koreainvestment.com:9443";
 const APP_KEY = process.env.KIS_APP_KEY || "";
@@ -89,12 +89,28 @@ async function throttle(gapMs: number): Promise<void> {
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
 }
 
-// KIS GET 호출 (tr_id 별)
+// 토큰 만료/무효(EGW00123 등) 시 캐시 토큰을 폐기 → 다음 호출에서 새로 발급한다.
+async function invalidateToken(): Promise<void> {
+  cachedToken = null;
+  await storeDel(TOKEN_KEY);
+}
+
+// KIS GET 호출 (tr_id 별). 토큰이 만료(EGW00123)면 폐기 후 1회 재발급·재시도한다.
 export async function kisGet(
   path: string,
   trId: string,
   params: Record<string, string>,
   revalidateSec?: number // 주면 그 초만큼 서버 캐시(자주 안 변하는 데이터용). 없으면 항상 최신.
+): Promise<any> {
+  return kisGetInner(path, trId, params, revalidateSec, false);
+}
+
+async function kisGetInner(
+  path: string,
+  trId: string,
+  params: Record<string, string>,
+  revalidateSec: number | undefined,
+  retried: boolean
 ): Promise<any> {
   const token = await getToken();
   const url = new URL(`${BASE}${path}`);
@@ -117,11 +133,27 @@ export async function kisGet(
     },
     ...cacheOpt,
   });
+
   if (!res.ok) {
     const t = await res.text();
+    // 토큰 만료/무효 → 폐기 후 새 토큰으로 한 번 재시도
+    if (!retried && /EGW00123|만료된\s*token/i.test(t)) {
+      await invalidateToken();
+      return kisGetInner(path, trId, params, revalidateSec, true);
+    }
     throw new Error(`KIS 호출 실패 (${trId}, ${res.status}). ${t.slice(0, 120)}`);
   }
-  return res.json();
+
+  const json = await res.json();
+  // HTTP 200이어도 rt_cd!=0 + 토큰 만료면 폐기 후 재시도
+  if (!retried && json && String(json.rt_cd ?? "0") !== "0") {
+    const msg = `${json.msg_cd || ""} ${json.msg1 || ""}`;
+    if (/EGW00123|만료된\s*token/i.test(msg)) {
+      await invalidateToken();
+      return kisGetInner(path, trId, params, revalidateSec, true);
+    }
+  }
+  return json;
 }
 
 // 숫자 안전 변환

@@ -38,6 +38,16 @@ export async function storeSet(key: string, value: any, ttlSec: number): Promise
   }
 }
 
+export async function storeDel(key: string): Promise<void> {
+  const r = getRedis();
+  if (!r) return;
+  try {
+    await r.del(key);
+  } catch {
+    /* 삭제 실패해도 무시 */
+  }
+}
+
 export function storeEnabled(): boolean {
   return !!getRedis();
 }
