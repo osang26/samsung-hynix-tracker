@@ -39,6 +39,67 @@ function aggregate(rows: Day[], keyOf: (d: string) => string) {
   return [...map.values()].sort((a, b) => (a.key < b.key ? -1 : 1));
 }
 
+// YYYYMMDD
+function ymd(d: Date): string {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// ---- KRX 정보데이터시스템 과거 백필 (비공식, MDCSTAT02302 일별추이) ----
+//  순매수 수량(주). 컬럼: TRDVAL1=기관합계 · TRDVAL2=기타법인 · TRDVAL3=개인 · TRDVAL4=외국인
+const ISIN: Record<string, string> = {
+  "005930": "KR7005930003", // 삼성전자
+  "000660": "KR7000660001", // SK하이닉스
+};
+const krxMem: Record<string, { at: number; data: Day[] }> = {};
+
+async function fetchKRX(code: string): Promise<Day[]> {
+  const isu = ISIN[code];
+  if (!isu) return [];
+  const c = krxMem[code];
+  if (c && Date.now() - c.at < 6 * 3600 * 1000) return c.data; // 6시간 메모리 캐시
+
+  const end = new Date();
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - 4);
+  const body = new URLSearchParams({
+    bld: "dbms/MDC/STAT/standard/MDCSTAT02302",
+    locale: "ko_KR",
+    isuCd: isu,
+    strtDd: ymd(start),
+    endDd: ymd(end),
+    inqTpCd: "2",   // 일별추이
+    trdVolVal: "1", // 1=거래량(주)
+    askBid: "3",    // 3=순매수
+    csvxls_isNo: "false",
+  });
+  const res = await fetch("https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "user-agent": "Mozilla/5.0",
+      referer: "https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020302",
+    },
+    body: body.toString(),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`KRX ${res.status}`);
+  const data: any = await res.json();
+  const rows: any[] = data.output || data.OutBlock_1 || [];
+  const p = (v: any) => {
+    const n = parseInt(String(v ?? "0").replace(/[,\s]/g, ""), 10);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const out: Day[] = rows
+    .map((r) => ({
+      date: String(r.TRD_DD || "").replace(/[/\-.]/g, ""),
+      orgnQty: p(r.TRDVAL1), prsnQty: p(r.TRDVAL3), frgnQty: p(r.TRDVAL4),
+      frgnAmt: 0, orgnAmt: 0, prsnAmt: 0,
+    }))
+    .filter((d) => d.date.length === 8);
+  krxMem[code] = { at: Date.now(), data: out };
+  return out;
+}
+
 async function fetchInvestor(code: string) {
   const data = await kisGet(
     "/uapi/domestic-stock/v1/quotations/inquire-investor",
@@ -59,7 +120,16 @@ async function fetchInvestor(code: string) {
   const stored = (await storeGet<Day[]>(BKEY)) || [];
   const map = new Map<string, Day>();
   for (const b of stored) if (b && b.date) map.set(b.date, b);
-  for (const b of fresh) map.set(b.date, b); // 최신값 우선
+  // 저장된 과거가 얕으면(누적 부족) KRX로 한 번 백필
+  if (stored.length < 200) {
+    try {
+      const krx = await fetchKRX(code);
+      for (const b of krx) if (!map.has(b.date)) map.set(b.date, b);
+    } catch {
+      /* KRX 실패 → KIS 누적으로 폴백 */
+    }
+  }
+  for (const b of fresh) map.set(b.date, b); // KIS 최신값 우선
   let all = [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
   if (all.length > 1600) all = all.slice(-1600); // ~6년치 보관
   await storeSet(BKEY, all, BUF_TTL);
@@ -76,6 +146,16 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const code = sp.get("code") || "005930";
   const force = sp.get("force") === "1";
+
+  // KRX 백필 확인용: /api/investor?code=005930&debug=krx
+  if (sp.get("debug") === "krx") {
+    try {
+      const krx = await fetchKRX(code);
+      return NextResponse.json({ count: krx.length, first: krx[0] ?? null, last: krx[krx.length - 1] ?? null });
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message });
+    }
+  }
 
   // 원본 필드/단위 확인용: /api/investor?code=005930&debug=1
   if (sp.get("debug") === "1") {
