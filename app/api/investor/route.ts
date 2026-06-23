@@ -223,7 +223,7 @@ export async function GET(req: Request) {
     }
   }
 
-  const key = `invres3:${code}`;
+  const key = `invres4:${code}`;
   if (!force) {
     const cached = await storeGet(key);
     if (cached) return NextResponse.json(cached);
