@@ -9,6 +9,7 @@ import {
   Cell,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
   XAxis,
   YAxis,
   Tooltip,
@@ -64,6 +65,12 @@ function manju(v: any): string {
   const man = Math.abs(n) / 1e4;
   if (man >= 1) return sign + Math.round(man).toLocaleString("ko-KR") + "만주";
   return sign + Math.abs(n).toLocaleString("ko-KR") + "주";
+}
+// 순매수 수량(주) → ±123,456 (일자별 표용)
+function signedQty(v: any): string {
+  const n = Number(v) || 0;
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+  return sign + Math.abs(n).toLocaleString("ko-KR");
 }
 function netClass(n: any): string {
   const v = Number(n) || 0;
@@ -146,6 +153,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const [consensus, setConsensus] = useState<any>(null);
   const [disclosure, setDisclosure] = useState<any>(null);
   const [investor, setInvestor] = useState<any>(null);
+  const [invPeriod, setInvPeriod] = useState("week"); // 투자자 기간: week|month|year
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
   const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
   const [finMode, setFinMode] = useState("q"); // 재무: q(분기) | y(연간)
@@ -558,34 +566,56 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
             </div>
           ) : (
             <>
-              <div className="sec">투자자별 순매수 <span className="sub">{fmtMD(invLatest.date)} · KIS</span></div>
-              <div className="inv-cards">
-                {[
-                  { k: "외국인", amt: invLatest.frgnAmt, qty: invLatest.frgnQty },
-                  { k: "기관", amt: invLatest.orgnAmt, qty: invLatest.orgnQty },
-                  { k: "개인", amt: invLatest.prsnAmt, qty: invLatest.prsnQty },
-                ].map((c, i) => (
-                  <div className="inv-card" key={i}>
-                    <div className="k">{c.k}</div>
-                    <div className={"v " + netClass(c.amt)}>{eokAmt(c.amt)}</div>
-                    <div className="inv-qty">{manju(c.qty)}</div>
-                  </div>
+              <div className="sec">기간별 누적 순매수 <span className="sub">수량(만주) · KIS</span></div>
+              <div className="ranges">
+                {[["week", "주"], ["month", "월"], ["year", "년"]].map(([k, lbl]) => (
+                  <button key={k} className={"range-btn" + (invPeriod === k ? " active" : "")} onClick={() => setInvPeriod(k)}>{lbl}</button>
                 ))}
               </div>
+              <div className="chartbox" style={{ height: 184 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={(investor.periods?.[invPeriod] || []).map((p: any) => ({ label: p.label, 개인: p.prsn, 외국인: p.frgn, 기관: p.orgn }))}
+                    margin={{ top: 6, right: 6, left: 6, bottom: 0 }}
+                    barCategoryGap="22%"
+                  >
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#7e8ca6" }} />
+                    <YAxis width={42} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={(v: any) => (v / 1e4).toFixed(0)} />
+                    <Tooltip formatter={(v: any, n: any) => [manju(v), n]} contentStyle={{ background: "#fff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434" }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <ReferenceLine y={0} stroke="#cfd9e8" />
+                    <Bar dataKey="개인" fill="#aab3c0" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="외국인" fill="#27b36a" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="기관" fill="#3b6fe0" radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {(() => {
+                const ps: any[] = investor.periods?.[invPeriod] || [];
+                const t = ps.reduce((a, p) => ({ prsn: a.prsn + (p.prsn || 0), frgn: a.frgn + (p.frgn || 0), orgn: a.orgn + (p.orgn || 0) }), { prsn: 0, frgn: 0, orgn: 0 });
+                const lbl = invPeriod === "week" ? "최근 4주" : invPeriod === "month" ? "최근 4개월" : "최근 4년";
+                return (
+                  <div className="inv-cards">
+                    <div className="inv-card"><div className="k">개인</div><div className={"v " + netClass(t.prsn)}>{manju(t.prsn)}</div><div className="inv-qty">{lbl}</div></div>
+                    <div className="inv-card"><div className="k">외국인</div><div className={"v " + netClass(t.frgn)}>{manju(t.frgn)}</div><div className="inv-qty">{lbl}</div></div>
+                    <div className="inv-card"><div className="k">기관</div><div className={"v " + netClass(t.orgn)}>{manju(t.orgn)}</div><div className="inv-qty">{lbl}</div></div>
+                  </div>
+                );
+              })()}
 
-              <div className="sec">일자별 순매수 <span className="sub">거래대금 · 최근</span></div>
-              <div className="dt-head inv4"><span>날짜</span><span>외국인</span><span>기관</span><span>개인</span></div>
+              <div className="sec">일자별 순매수 <span className="sub">수량(주) · 최근</span></div>
+              <div className="dt-head inv4"><span>날짜</span><span>개인</span><span>외국인</span><span>기관</span></div>
               <div className="dt-body">
                 {investor.items.map((it: any, i: number) => (
                   <div className="dt-row inv4" key={i}>
                     <span>{fmtMD(it.date)}</span>
-                    <span className={netClass(it.frgnAmt)}>{eokAmt(it.frgnAmt)}</span>
-                    <span className={netClass(it.orgnAmt)}>{eokAmt(it.orgnAmt)}</span>
-                    <span className={netClass(it.prsnAmt)}>{eokAmt(it.prsnAmt)}</span>
+                    <span className={netClass(it.prsnQty)}>{signedQty(it.prsnQty)}</span>
+                    <span className={netClass(it.frgnQty)}>{signedQty(it.frgnQty)}</span>
+                    <span className={netClass(it.orgnQty)}>{signedQty(it.orgnQty)}</span>
                   </div>
                 ))}
               </div>
-              <div className="fin-note">+순매수 / −순매도 · 거래대금 기준 · KIS</div>
+              <div className="fin-note">+순매수 / −순매도 · 수량(주) · 월·년은 데이터가 쌓이며 채워져요 · KIS</div>
             </>
           ))}
       </div>
