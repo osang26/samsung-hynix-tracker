@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { kisGet, num } from "@/lib/kis";
 import { storeGet, storeSet } from "@/lib/store";
+import HISTORY from "@/lib/investor-history.json";
 
 // 종목별 투자자매매동향: 외국인·기관·개인 순매수(수량/거래대금) 일별.
 // KIS inquire-investor (FHKST01010900)는 최근 ~한 달치만 줘서, 저장소에 매일 누적해
@@ -72,17 +73,42 @@ async function fetchKRX(code: string): Promise<Day[]> {
     askBid: "3",    // 3=순매수
     csvxls_isNo: "false",
   });
+  // KRX는 세션 쿠키가 없으면 "LOGOUT"(400) → 먼저 로더 페이지를 GET해 쿠키를 받는다.
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+  const LOADER = "https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020302";
+  let cookie = "";
+  try {
+    const pre = await fetch(LOADER, { headers: { "user-agent": UA }, redirect: "manual", cache: "no-store" });
+    const h: any = pre.headers;
+    const arr: string[] =
+      typeof h.getSetCookie === "function"
+        ? h.getSetCookie()
+        : pre.headers.get("set-cookie")
+        ? [pre.headers.get("set-cookie") as string]
+        : [];
+    cookie = arr.map((x) => x.split(";")[0].trim()).filter(Boolean).join("; ");
+  } catch {
+    /* 쿠키 못 받아도 일단 시도 */
+  }
+
   const res = await fetch("https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd", {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "user-agent": "Mozilla/5.0",
-      referer: "https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020302",
+      "user-agent": UA,
+      accept: "application/json, text/javascript, */*; q=0.01",
+      "x-requested-with": "XMLHttpRequest", // KRX getJsonData는 AJAX 요청만 허용
+      origin: "https://data.krx.co.kr",
+      referer: LOADER,
+      ...(cookie ? { cookie } : {}),
     },
     body: body.toString(),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`KRX ${res.status}`);
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`KRX ${res.status}: ${t.slice(0, 180)}`);
+  }
   const data: any = await res.json();
   const rows: any[] = data.output || data.OutBlock_1 || [];
   const p = (v: any) => {
@@ -120,26 +146,22 @@ async function fetchInvestor(code: string) {
   const stored = (await storeGet<Day[]>(BKEY)) || [];
   const map = new Map<string, Day>();
   for (const b of stored) if (b && b.date) map.set(b.date, b);
-  // 저장된 과거가 얕으면(누적 부족) KRX로 한 번 백필
-  if (stored.length < 200) {
-    try {
-      const krx = await fetchKRX(code);
-      for (const b of krx) if (!map.has(b.date)) map.set(b.date, b);
-    } catch {
-      /* KRX 실패 → KIS 누적으로 폴백 */
-    }
-  }
+  // (KRX 자동 백필은 봇 차단으로 비활성화 — 필요 시 CSV 업로드로 과거 채움)
   for (const b of fresh) map.set(b.date, b); // KIS 최신값 우선
   let all = [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
   if (all.length > 1600) all = all.slice(-1600); // ~6년치 보관
   await storeSet(BKEY, all, BUF_TTL);
 
-  // 주/월/년 누적 순매수(수량) — 최근 4개씩
-  const week = aggregate(all, mondayKey).slice(-4).map((b) => ({ label: `${+b.key.slice(4, 6)}.${+b.key.slice(6, 8)}`, frgn: b.frgn, orgn: b.orgn, prsn: b.prsn }));
-  const month = aggregate(all, (d) => d.slice(0, 6)).slice(-4).map((b) => ({ label: `${+b.key.slice(4, 6)}월`, frgn: b.frgn, orgn: b.orgn, prsn: b.prsn }));
-  const year = aggregate(all, (d) => d.slice(0, 4)).slice(-4).map((b) => ({ label: b.key, frgn: b.frgn, orgn: b.orgn, prsn: b.prsn }));
+  // 주/월/년 누적 순매수 '거래대금' — KRX 과거 데이터(임베드)에서 가져온다(최근 4개씩).
+  //  CSV 올린 종목(하이닉스)은 수년치, 없는 종목은 빈 값(일별 표는 KIS로 계속 나옴).
+  const hist: any = (HISTORY as any)[code] || {};
+  const periods = {
+    week: (hist.week || []).slice(-4),
+    month: (hist.month || []).slice(-4),
+    year: (hist.year || []).slice(-4),
+  };
 
-  return { code, items: fresh.slice(0, 20), periods: { week, month, year } };
+  return { code, items: fresh.slice(0, 20), periods };
 }
 
 export async function GET(req: Request) {
@@ -147,14 +169,41 @@ export async function GET(req: Request) {
   const code = sp.get("code") || "005930";
   const force = sp.get("force") === "1";
 
-  // KRX 백필 확인용: /api/investor?code=005930&debug=krx
+  // KRX 백필 단계별 진단: /api/investor?code=005930&debug=krx
   if (sp.get("debug") === "krx") {
+    const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+    const LOADER = "https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020302";
+    const out: any = { isu: ISIN[code] || null };
     try {
-      const krx = await fetchKRX(code);
-      return NextResponse.json({ count: krx.length, first: krx[0] ?? null, last: krx[krx.length - 1] ?? null });
+      const pre = await fetch(LOADER, { headers: { "user-agent": UA }, redirect: "manual", cache: "no-store" });
+      out.preStatus = pre.status;
+      const h: any = pre.headers;
+      const arr: string[] =
+        typeof h.getSetCookie === "function" ? h.getSetCookie() : pre.headers.get("set-cookie") ? [pre.headers.get("set-cookie") as string] : [];
+      out.setCookieCount = arr.length;
+      const cookie = arr.map((x) => x.split(";")[0].trim()).filter(Boolean).join("; ");
+      out.cookiePreview = cookie.slice(0, 50);
+      const e2 = new Date(), s2 = new Date();
+      s2.setMonth(s2.getMonth() - 2);
+      const b = new URLSearchParams({
+        bld: "dbms/MDC/STAT/standard/MDCSTAT02302", locale: "ko_KR", isuCd: ISIN[code] || "",
+        strtDd: ymd(s2), endDd: ymd(e2), inqTpCd: "2", trdVolVal: "1", askBid: "3",
+      });
+      const res = await fetch("https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded; charset=UTF-8", "user-agent": UA,
+          accept: "application/json, text/javascript, */*; q=0.01", "x-requested-with": "XMLHttpRequest",
+          origin: "https://data.krx.co.kr", referer: LOADER, ...(cookie ? { cookie } : {}),
+        },
+        body: b.toString(), cache: "no-store",
+      });
+      out.postStatus = res.status;
+      out.postBody = (await res.text()).slice(0, 180);
     } catch (e: any) {
-      return NextResponse.json({ error: e.message });
+      out.error = e.message;
     }
+    return NextResponse.json(out);
   }
 
   // 원본 필드/단위 확인용: /api/investor?code=005930&debug=1
@@ -172,7 +221,7 @@ export async function GET(req: Request) {
     }
   }
 
-  const key = `invres:${code}`;
+  const key = `invres2:${code}`;
   if (!force) {
     const cached = await storeGet(key);
     if (cached) return NextResponse.json(cached);

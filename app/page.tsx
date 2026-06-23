@@ -78,6 +78,15 @@ function qtyShort(v: any): string {
   if (n >= 1e4) return Math.round(n / 1e4).toLocaleString("ko-KR") + "만주";
   return n.toLocaleString("ko-KR") + "주";
 }
+// 거래대금(원) → ±조/억 (투자자 기간별 누적 순매수용)
+function joEok(v: any): string {
+  const n = Number(v) || 0;
+  if (n === 0) return "0";
+  const sign = n > 0 ? "+" : "−";
+  const jo = Math.abs(n) / 1e12;
+  if (jo >= 1) return sign + jo.toFixed(2) + "조";
+  return sign + Math.round(Math.abs(n) / 1e8).toLocaleString("ko-KR") + "억";
+}
 function netClass(n: any): string {
   const v = Number(n) || 0;
   return v > 0 ? "up" : v < 0 ? "down" : "flat";
@@ -575,7 +584,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
             </div>
           ) : (
             <>
-              <div className="sec">기간별 누적 순매수 <span className="sub">수량(만주) · KIS</span></div>
+              <div className="sec">기간별 누적 순매수 <span className="sub">거래대금(조) · KRX</span></div>
               <div className="ranges">
                 {[["week", "주"], ["month", "월"], ["year", "년"]].map(([k, lbl]) => (
                   <button key={k} className={"range-btn" + (invPeriod === k ? " active" : "")} onClick={() => setInvPeriod(k)}>{lbl}</button>
@@ -589,8 +598,8 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
                     barCategoryGap="22%"
                   >
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#7e8ca6" }} />
-                    <YAxis width={42} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={(v: any) => (v / 1e4).toFixed(0)} />
-                    <Tooltip formatter={(v: any, n: any) => [manju(v), n]} contentStyle={{ background: "#fff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434" }} />
+                    <YAxis width={42} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={(v: any) => (v / 1e12).toFixed(0)} />
+                    <Tooltip formatter={(v: any, n: any) => [joEok(v), n]} contentStyle={{ background: "#fff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434" }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <ReferenceLine y={0} stroke="#cfd9e8" />
                     <Bar dataKey="개인" fill="#aab3c0" radius={[2, 2, 0, 0]} />
@@ -605,9 +614,9 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
                 const lbl = invPeriod === "week" ? "최근 4주" : invPeriod === "month" ? "최근 4개월" : "최근 4년";
                 return (
                   <div className="inv-cards">
-                    <div className="inv-card"><div className="k">개인</div><div className={"v " + netClass(t.prsn)}>{manju(t.prsn)}</div><div className="inv-qty">{lbl}</div></div>
-                    <div className="inv-card"><div className="k">외국인</div><div className={"v " + netClass(t.frgn)}>{manju(t.frgn)}</div><div className="inv-qty">{lbl}</div></div>
-                    <div className="inv-card"><div className="k">기관</div><div className={"v " + netClass(t.orgn)}>{manju(t.orgn)}</div><div className="inv-qty">{lbl}</div></div>
+                    <div className="inv-card"><div className="k">개인</div><div className={"v " + netClass(t.prsn)}>{joEok(t.prsn)}</div><div className="inv-qty">{lbl}</div></div>
+                    <div className="inv-card"><div className="k">외국인</div><div className={"v " + netClass(t.frgn)}>{joEok(t.frgn)}</div><div className="inv-qty">{lbl}</div></div>
+                    <div className="inv-card"><div className="k">기관</div><div className={"v " + netClass(t.orgn)}>{joEok(t.orgn)}</div><div className="inv-qty">{lbl}</div></div>
                   </div>
                 );
               })()}
