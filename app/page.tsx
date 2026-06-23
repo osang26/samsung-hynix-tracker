@@ -72,6 +72,12 @@ function signedQty(v: any): string {
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
   return sign + Math.abs(n).toLocaleString("ko-KR");
 }
+// 수량(주) → 만주/주 (부호 없음, 공매도 거래량용)
+function qtyShort(v: any): string {
+  const n = Math.abs(Number(v) || 0);
+  if (n >= 1e4) return Math.round(n / 1e4).toLocaleString("ko-KR") + "만주";
+  return n.toLocaleString("ko-KR") + "주";
+}
 function netClass(n: any): string {
   const v = Number(n) || 0;
   return v > 0 ? "up" : v < 0 ? "down" : "flat";
@@ -154,6 +160,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const [disclosure, setDisclosure] = useState<any>(null);
   const [investor, setInvestor] = useState<any>(null);
   const [invPeriod, setInvPeriod] = useState("week"); // 투자자 기간: week|month|year
+  const [short, setShort] = useState<any>(null);
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
   const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
   const [finMode, setFinMode] = useState("q"); // 재무: q(분기) | y(연간)
@@ -170,6 +177,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     fetch(`/api/consensus?code=${code}`).then((r) => r.json()).then(setConsensus).catch(() => setConsensus(null));
     fetch(`/api/disclosure?code=${code}`).then((r) => r.json()).then(setDisclosure).catch(() => setDisclosure(null));
     fetch(`/api/investor?code=${code}`).then((r) => r.json()).then(setInvestor).catch(() => setInvestor(null));
+    fetch(`/api/short?code=${code}`).then((r) => r.json()).then(setShort).catch(() => setShort(null));
   }, [code, name]);
 
   // 뉴스: 5분마다 자동 갱신
@@ -255,6 +263,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
         <button className={"tab-btn" + (tab === "fin" ? " active" : "")} onClick={() => setTab("fin")}>재무</button>
         <button className={"tab-btn" + (tab === "tip" ? " active" : "")} onClick={() => setTab("tip")}>투자포인트</button>
         <button className={"tab-btn" + (tab === "inv" ? " active" : "")} onClick={() => setTab("inv")}>투자자</button>
+        <button className={"tab-btn" + (tab === "short" ? " active" : "")} onClick={() => setTab("short")}>공매도</button>
       </div>
 
       <div className="tab-panel">
@@ -616,6 +625,44 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
                 ))}
               </div>
               <div className="fin-note">+순매수 / −순매도 · 수량(주) · 월·년은 데이터가 쌓이며 채워져요 · KIS</div>
+            </>
+          ))}
+
+        {tab === "short" &&
+          (!short || short.error || !short.items || short.items.length === 0 ? (
+            <div className="muted">{short === null ? "공매도 불러오는 중…" : "공매도 데이터가 없어요."}</div>
+          ) : (
+            <>
+              <div className="sec">공매도 비중 추이 <span className="sub">최근 · KIS</span></div>
+              <div className="inv-cards">
+                <div className="inv-card"><div className="k">최근일 비중</div><div className="v">{short.items[0].ratio ? short.items[0].ratio.toFixed(2) + "%" : "-"}</div><div className="inv-qty">{fmtMD(short.items[0].date)}</div></div>
+                <div className="inv-card"><div className="k">공매도 거래량</div><div className="v">{qtyShort(short.items[0].qty)}</div><div className="inv-qty">{fmtMD(short.items[0].date)}</div></div>
+                <div className="inv-card"><div className="k">공매도 대금</div><div className="v">{eok(short.items[0].amt / 1e8)}</div><div className="inv-qty">{fmtMD(short.items[0].date)}</div></div>
+              </div>
+              <div className="chartbox" style={{ height: 168 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={short.items.slice(0, 20).slice().reverse().map((it: any) => ({ label: fmtMD(it.date), 비중: it.ratio }))} margin={{ top: 8, right: 8, left: 6, bottom: 0 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#7e8ca6" }} minTickGap={18} />
+                    <YAxis width={38} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={(v: any) => v + "%"} />
+                    <Tooltip formatter={(v: any) => [v + "%", "공매도 비중"]} contentStyle={{ background: "#fff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434" }} />
+                    <Line type="monotone" dataKey="비중" stroke="#e5453b" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="sec">일자별 공매도 <span className="sub">거래량·대금·비중 · KIS</span></div>
+              <div className="dt-head short4"><span>날짜</span><span>거래량</span><span>거래대금</span><span>비중</span></div>
+              <div className="dt-body">
+                {short.items.map((it: any, i: number) => (
+                  <div className="dt-row short4" key={i}>
+                    <span>{fmtMD(it.date)}</span>
+                    <span>{Number(it.qty).toLocaleString("ko-KR")}</span>
+                    <span>{eok(it.amt / 1e8)}</span>
+                    <span>{it.ratio ? it.ratio.toFixed(2) + "%" : "-"}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="fin-note">공매도 거래량·비중 · 대금=수량×종가 추정 · KIS</div>
             </>
           ))}
       </div>
