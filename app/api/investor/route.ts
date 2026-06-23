@@ -42,6 +42,21 @@ export async function GET(req: Request) {
   const code = sp.get("code") || "005930";
   const force = sp.get("force") === "1";
 
+  // 원본 필드/단위 확인용: /api/investor?code=005930&debug=1
+  if (sp.get("debug") === "1") {
+    try {
+      const raw = await kisGet(
+        "/uapi/domestic-stock/v1/quotations/inquire-investor",
+        "FHKST01010900",
+        { FID_COND_MRKT_DIV_CODE: "J", FID_INPUT_ISCD: code }
+      );
+      const rows = Array.isArray(raw.output) ? raw.output : raw.output1 || raw.output2 || [];
+      return NextResponse.json({ sample: rows[0] ?? null, count: rows.length });
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message });
+    }
+  }
+
   const key = `investor:${code}`;
   if (!force) {
     const cached = await storeGet(key);

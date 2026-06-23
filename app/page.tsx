@@ -46,14 +46,24 @@ function eok(n: any): string {
 function dirClass(dir: string): string {
   return dir === "up" ? "up" : dir === "down" ? "down" : "flat";
 }
-// 순매수 거래대금(원) → ±억/조 (양수=순매수, 음수=순매도)
+// 순매수 거래대금(KIS는 '백만원' 단위) → ±억/조 (양수=순매수, 음수=순매도)
 function eokAmt(v: any): string {
   const n = Number(v) || 0;
-  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
-  const eok = Math.abs(n) / 1e8;
-  if (eok >= 10000) return sign + (eok / 10000).toFixed(1) + "조";
-  if (eok >= 1) return sign + Math.round(eok).toLocaleString("ko-KR") + "억";
-  return sign + Math.round(Math.abs(n) / 1e4).toLocaleString("ko-KR") + "만";
+  if (n === 0) return "0";
+  const sign = n > 0 ? "+" : "−";
+  const eok = Math.abs(n) / 100; // 100백만원 = 1억원
+  if (eok >= 10000) return sign + (eok / 10000).toFixed(2) + "조";
+  if (eok >= 10) return sign + Math.round(eok).toLocaleString("ko-KR") + "억";
+  return sign + eok.toFixed(1) + "억";
+}
+// 순매수 수량(주) → ±만주
+function manju(v: any): string {
+  const n = Number(v) || 0;
+  if (n === 0) return "0주";
+  const sign = n > 0 ? "+" : "−";
+  const man = Math.abs(n) / 1e4;
+  if (man >= 1) return sign + Math.round(man).toLocaleString("ko-KR") + "만주";
+  return sign + Math.abs(n).toLocaleString("ko-KR") + "주";
 }
 function netClass(n: any): string {
   const v = Number(n) || 0;
@@ -197,6 +207,13 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
 
   // 투자포인트(정적): 요약 + 강세/약세 + 사업부문
   const insight = INSIGHTS[code];
+
+  // 투자자: 실제 데이터가 있는 최근일 (오늘은 장중이라 0일 수 있어 건너뜀)
+  const invItems = investor && investor.items ? investor.items : [];
+  const invLatest =
+    invItems.find((it: any) => it.frgnAmt || it.orgnAmt || it.prsnAmt || it.frgnQty || it.orgnQty || it.prsnQty) ||
+    invItems[0] ||
+    null;
 
   return (
     <div className="card">
@@ -541,17 +558,17 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
             </div>
           ) : (
             <>
-              <div className="sec">투자자별 순매수 <span className="sub">{fmtMD(investor.items[0].date)} · KIS</span></div>
+              <div className="sec">투자자별 순매수 <span className="sub">{fmtMD(invLatest.date)} · KIS</span></div>
               <div className="inv-cards">
                 {[
-                  { k: "외국인", amt: investor.items[0].frgnAmt, qty: investor.items[0].frgnQty },
-                  { k: "기관", amt: investor.items[0].orgnAmt, qty: investor.items[0].orgnQty },
-                  { k: "개인", amt: investor.items[0].prsnAmt, qty: investor.items[0].prsnQty },
+                  { k: "외국인", amt: invLatest.frgnAmt, qty: invLatest.frgnQty },
+                  { k: "기관", amt: invLatest.orgnAmt, qty: invLatest.orgnQty },
+                  { k: "개인", amt: invLatest.prsnAmt, qty: invLatest.prsnQty },
                 ].map((c, i) => (
                   <div className="inv-card" key={i}>
                     <div className="k">{c.k}</div>
                     <div className={"v " + netClass(c.amt)}>{eokAmt(c.amt)}</div>
-                    <div className="inv-qty">{(Number(c.qty) > 0 ? "+" : "") + Number(c.qty).toLocaleString("ko-KR")}주</div>
+                    <div className="inv-qty">{manju(c.qty)}</div>
                   </div>
                 ))}
               </div>
