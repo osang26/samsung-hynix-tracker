@@ -46,6 +46,23 @@ function eok(n: any): string {
 function dirClass(dir: string): string {
   return dir === "up" ? "up" : dir === "down" ? "down" : "flat";
 }
+// 순매수 거래대금(원) → ±억/조 (양수=순매수, 음수=순매도)
+function eokAmt(v: any): string {
+  const n = Number(v) || 0;
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+  const eok = Math.abs(n) / 1e8;
+  if (eok >= 10000) return sign + (eok / 10000).toFixed(1) + "조";
+  if (eok >= 1) return sign + Math.round(eok).toLocaleString("ko-KR") + "억";
+  return sign + Math.round(Math.abs(n) / 1e4).toLocaleString("ko-KR") + "만";
+}
+function netClass(n: any): string {
+  const v = Number(n) || 0;
+  return v > 0 ? "up" : v < 0 ? "down" : "flat";
+}
+function fmtMD(d: string): string {
+  if (!d || d.length < 8) return d || "";
+  return +d.slice(4, 6) + "." + +d.slice(6, 8); // YYYYMMDD → M.D
+}
 function arrow(dir: string): string {
   return dir === "up" ? "▲" : dir === "down" ? "▼" : "–";
 }
@@ -118,6 +135,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const [daily, setDaily] = useState<any>(null);
   const [consensus, setConsensus] = useState<any>(null);
   const [disclosure, setDisclosure] = useState<any>(null);
+  const [investor, setInvestor] = useState<any>(null);
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
   const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
   const [finMode, setFinMode] = useState("q"); // 재무: q(분기) | y(연간)
@@ -127,13 +145,22 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     setNewsTab("news");
   }, [tab]);
 
-  // 재무 / 뉴스: 1회
+  // 재무/일별/컨센서스/공시: 1회
   useEffect(() => {
     fetch(`/api/financials?code=${code}`).then((r) => r.json()).then(setFin).catch(() => setFin({ error: "재무 오류" }));
-    fetch(`/api/news?q=${encodeURIComponent(name)}`).then((r) => r.json()).then(setNews).catch(() => setNews({ error: "뉴스 오류" }));
     fetch(`/api/daily?code=${code}`).then((r) => r.json()).then(setDaily).catch(() => setDaily({ error: "일별시세 오류" }));
     fetch(`/api/consensus?code=${code}`).then((r) => r.json()).then(setConsensus).catch(() => setConsensus(null));
     fetch(`/api/disclosure?code=${code}`).then((r) => r.json()).then(setDisclosure).catch(() => setDisclosure(null));
+    fetch(`/api/investor?code=${code}`).then((r) => r.json()).then(setInvestor).catch(() => setInvestor(null));
+  }, [code, name]);
+
+  // 뉴스: 5분마다 자동 갱신
+  useEffect(() => {
+    const loadNews = () =>
+      fetch(`/api/news?q=${encodeURIComponent(name)}`).then((r) => r.json()).then(setNews).catch(() => setNews({ error: "뉴스 오류" }));
+    loadNews();
+    const id = setInterval(loadNews, 5 * 60 * 1000);
+    return () => clearInterval(id);
   }, [code, name]);
 
   // 차트: 기간(range)이 바뀔 때마다 다시 받아옴
@@ -202,6 +229,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
         <button className={"tab-btn" + (tab === "news" ? " active" : "")} onClick={() => setTab("news")}>뉴스</button>
         <button className={"tab-btn" + (tab === "fin" ? " active" : "")} onClick={() => setTab("fin")}>재무</button>
         <button className={"tab-btn" + (tab === "tip" ? " active" : "")} onClick={() => setTab("tip")}>투자포인트</button>
+        <button className={"tab-btn" + (tab === "inv" ? " active" : "")} onClick={() => setTab("inv")}>투자자</button>
       </div>
 
       <div className="tab-panel">
@@ -505,6 +533,44 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
           </>
         )}
         {tab === "tip" && !insight && <div className="muted">자료 준비 중입니다.</div>}
+
+        {tab === "inv" &&
+          (!investor || investor.error || !investor.items || investor.items.length === 0 ? (
+            <div className="muted">
+              {investor === null ? "투자자 동향 불러오는 중…" : "투자자 데이터가 없어요 (당일치는 장 마감 후 제공)."}
+            </div>
+          ) : (
+            <>
+              <div className="sec">투자자별 순매수 <span className="sub">{fmtMD(investor.items[0].date)} · KIS</span></div>
+              <div className="inv-cards">
+                {[
+                  { k: "외국인", amt: investor.items[0].frgnAmt, qty: investor.items[0].frgnQty },
+                  { k: "기관", amt: investor.items[0].orgnAmt, qty: investor.items[0].orgnQty },
+                  { k: "개인", amt: investor.items[0].prsnAmt, qty: investor.items[0].prsnQty },
+                ].map((c, i) => (
+                  <div className="inv-card" key={i}>
+                    <div className="k">{c.k}</div>
+                    <div className={"v " + netClass(c.amt)}>{eokAmt(c.amt)}</div>
+                    <div className="inv-qty">{(Number(c.qty) > 0 ? "+" : "") + Number(c.qty).toLocaleString("ko-KR")}주</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="sec">일자별 순매수 <span className="sub">거래대금 · 최근</span></div>
+              <div className="dt-head inv4"><span>날짜</span><span>외국인</span><span>기관</span><span>개인</span></div>
+              <div className="dt-body">
+                {investor.items.map((it: any, i: number) => (
+                  <div className="dt-row inv4" key={i}>
+                    <span>{fmtMD(it.date)}</span>
+                    <span className={netClass(it.frgnAmt)}>{eokAmt(it.frgnAmt)}</span>
+                    <span className={netClass(it.orgnAmt)}>{eokAmt(it.orgnAmt)}</span>
+                    <span className={netClass(it.prsnAmt)}>{eokAmt(it.prsnAmt)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="fin-note">+순매수 / −순매도 · 거래대금 기준 · KIS</div>
+            </>
+          ))}
       </div>
     </div>
   );

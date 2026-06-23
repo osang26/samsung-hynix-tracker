@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { storeGet, storeSet } from "@/lib/store";
 
-// 무료 뉴스: 구글 뉴스 RSS (앱키 불필요) — 저장소 캐시(30분). ?force=1 이면 새로 받아 저장.
-const TTL = 1800; // 30분
+// 무료 뉴스: 구글 뉴스 RSS (앱키 불필요) — 저장소 캐시(5분, 화면도 5분마다 폴링). ?force=1 새로 받음.
+const TTL = 300; // 5분
 
 async function fetchNews(q: string) {
   const rss = `https://news.google.com/rss/search?q=${encodeURIComponent(

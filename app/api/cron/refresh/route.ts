@@ -47,6 +47,7 @@ export async function GET(req: Request) {
     await hit(`daily ${code}`, `${base}/api/daily?code=${code}&force=1`);
     await hit(`consensus ${code}`, `${base}/api/consensus?code=${code}&force=1`);
     await hit(`disc ${code}`, `${base}/api/disclosure?code=${code}&force=1`);
+    await hit(`investor ${code}`, `${base}/api/investor?code=${code}&force=1`);
   }
   for (const code of codes) {
     const q = STOCKS[code].name;
