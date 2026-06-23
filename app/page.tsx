@@ -621,6 +621,26 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
                 );
               })()}
 
+              {investor.foreign && investor.foreign.series && investor.foreign.series.length > 0 && (
+                <>
+                  <div className="sec">외국인 지분율 추이 <span className="sub">월별 · KRX</span></div>
+                  <div className="inv-cards" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                    <div className="inv-card"><div className="k">현재 지분율</div><div className="v">{investor.foreign.now.pct}%</div><div className="inv-qty">{fmtMD(investor.foreign.now.d)}</div></div>
+                    <div className="inv-card"><div className="k">외국인 보유주식</div><div className="v">{(investor.foreign.now.qty / 1e8).toFixed(2)}억주</div><div className="inv-qty">{fmtMD(investor.foreign.now.d)}</div></div>
+                  </div>
+                  <div className="chartbox" style={{ height: 152 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={investor.foreign.series} margin={{ top: 8, right: 8, left: 6, bottom: 0 }}>
+                        <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#7e8ca6" }} minTickGap={28} />
+                        <YAxis width={38} domain={["dataMin - 2", "dataMax + 2"]} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={(v: any) => v + "%"} />
+                        <Tooltip formatter={(v: any) => [v + "%", "외국인 지분율"]} contentStyle={{ background: "#fff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434" }} />
+                        <Line type="monotone" dataKey="v" stroke="#27b36a" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </>
+              )}
+
               <div className="sec">일자별 순매수 <span className="sub">수량(주) · 최근</span></div>
               <div className="dt-head inv4"><span>날짜</span><span>개인</span><span>외국인</span><span>기관</span></div>
               <div className="dt-body">

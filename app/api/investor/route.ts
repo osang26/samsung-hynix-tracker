@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { kisGet, num } from "@/lib/kis";
 import { storeGet, storeSet } from "@/lib/store";
 import HISTORY from "@/lib/investor-history.json";
+import FOREIGN from "@/lib/foreign-ownership.json";
 
 // 종목별 투자자매매동향: 외국인·기관·개인 순매수(수량/거래대금) 일별.
 // KIS inquire-investor (FHKST01010900)는 최근 ~한 달치만 줘서, 저장소에 매일 누적해
@@ -161,7 +162,8 @@ async function fetchInvestor(code: string) {
     year: (hist.year || []).slice(-4),
   };
 
-  return { code, items: fresh.slice(0, 20), periods };
+  const foreign = (FOREIGN as any)[code] || null; // 외국인 지분율 추이(월별, KRX)
+  return { code, items: fresh.slice(0, 20), periods, foreign };
 }
 
 export async function GET(req: Request) {
@@ -221,7 +223,7 @@ export async function GET(req: Request) {
     }
   }
 
-  const key = `invres2:${code}`;
+  const key = `invres3:${code}`;
   if (!force) {
     const cached = await storeGet(key);
     if (cached) return NextResponse.json(cached);
