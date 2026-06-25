@@ -170,6 +170,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const [investor, setInvestor] = useState<any>(null);
   const [invPeriod, setInvPeriod] = useState("week"); // 투자자 기간: week|month|year
   const [short, setShort] = useState<any>(null);
+  const [member, setMember] = useState<any>(null);
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
   const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
   const [finMode, setFinMode] = useState("q"); // 재무: q(분기) | y(연간)
@@ -197,6 +198,15 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     const id = setInterval(loadNews, 5 * 60 * 1000);
     return () => clearInterval(id);
   }, [code, name]);
+
+  // 거래원: 15초마다 갱신(장중 스냅샷)
+  useEffect(() => {
+    const loadMember = () =>
+      fetch(`/api/member?code=${code}`).then((r) => r.json()).then(setMember).catch(() => setMember(null));
+    loadMember();
+    const id = setInterval(loadMember, 15000);
+    return () => clearInterval(id);
+  }, [code]);
 
   // 차트: 기간(range)이 바뀔 때마다 다시 받아옴
   useEffect(() => {
@@ -273,6 +283,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
         <button className={"tab-btn" + (tab === "tip" ? " active" : "")} onClick={() => setTab("tip")}>투자포인트</button>
         <button className={"tab-btn" + (tab === "inv" ? " active" : "")} onClick={() => setTab("inv")}>투자자</button>
         <button className={"tab-btn" + (tab === "short" ? " active" : "")} onClick={() => setTab("short")}>공매도</button>
+        <button className={"tab-btn" + (tab === "member" ? " active" : "")} onClick={() => setTab("member")}>거래원</button>
       </div>
 
       <div className="tab-panel">
@@ -692,6 +703,36 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
                 ))}
               </div>
               <div className="fin-note">공매도 거래량·비중 · 대금=수량×종가 추정 · KIS</div>
+            </>
+          ))}
+
+        {tab === "member" &&
+          (!member || member.error || (!member.buy?.length && !member.sell?.length) ? (
+            <div className="muted">{member === null ? "거래원 불러오는 중…" : "거래원 정보가 없어요 (장중에 표시)."}</div>
+          ) : (
+            <>
+              <div className="sec">거래원 <span className="sub">상위 5 · 당일 누적 · KIS</span></div>
+              <div className="mbr-cols">
+                <div className="mbr-col">
+                  <div className="mbr-head up">매수 상위</div>
+                  {(member.buy || []).map((m: any, i: number) => (
+                    <div className="mbr-row" key={i}>
+                      <span className="mbr-name">{m.name}{m.foreign && <span className="mbr-frgn">외국계</span>}</span>
+                      <span className="mbr-qty up">{Number(m.qty).toLocaleString("ko-KR")}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mbr-col">
+                  <div className="mbr-head down">매도 상위</div>
+                  {(member.sell || []).map((m: any, i: number) => (
+                    <div className="mbr-row" key={i}>
+                      <span className="mbr-name">{m.name}{m.foreign && <span className="mbr-frgn">외국계</span>}</span>
+                      <span className="mbr-qty down">{Number(m.qty).toLocaleString("ko-KR")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="fin-note">상위 5개 거래원 · 당일 누적 거래량(주) · 15초 갱신 · KIS</div>
             </>
           ))}
       </div>
