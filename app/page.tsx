@@ -213,7 +213,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     let alive = true;
     const load = (clear: boolean) => {
       if (clear) setChart(null);
-      fetch(`/api/chart?code=${code}&range=${range}`)
+      fetch(`/api/chart?code=${code}&range=${range}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => { if (alive) setChart(d); })
         .catch(() => { if (alive) setChart({ error: "차트 오류" }); });

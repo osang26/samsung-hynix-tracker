@@ -170,6 +170,28 @@ export async function GET(req: Request) {
   const force = sp.get("force") === "1";
   if (!CFG[range]) return NextResponse.json({ error: "잘못된 기간" }, { status: 400 });
 
+  // 1일 차트 진단: /api/chart?code=000660&range=1D&debug=1
+  if (range === "1D" && sp.get("debug") === "1") {
+    try {
+      const todays = await intradayRaw(code);
+      const merged = await mergeIntraday(code, todays);
+      const nk = nowKeyKST();
+      const lab = (b: any) => (b ? `${b.d} ${b.t} vol=${b.volume}` : null);
+      return NextResponse.json({
+        nowKeyKST: nk,
+        todaysCount: todays.length,
+        todaysLast: lab(todays[todays.length - 1]),
+        mergedCount: merged.length,
+        mergedFirst: lab(merged[0]),
+        mergedLast: lab(merged[merged.length - 1]),
+        futureInTodays: todays.filter((b) => b.d + b.t > nk).length,
+        futureInMerged: merged.filter((b) => b.d + b.t > nk).length,
+      });
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message, cause: String(e?.cause ?? "") });
+    }
+  }
+
   const key = `chart2:${code}:${range}`;
   if (!force) {
     const cached = await storeGet(key);
