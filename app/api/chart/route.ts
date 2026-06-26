@@ -50,6 +50,21 @@ function minus1min(hms: string): string | null {
 //  날짜 경계를 넘어 계속 거슬러 가되, 더 과거가 안 나오면 멈춘다(best-effort, graceful).
 const SESSION_MIN = 720; // 08:00~20:00 = 12시간(1분봉 720개)
 
+// 현재 시각(KST) YYYYMMDDHHMMSS
+function nowKeyKST(): string {
+  const k = new Date(Date.now() + 9 * 3600 * 1000); // UTC+9
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${k.getUTCFullYear()}${p(k.getUTCMonth() + 1)}${p(k.getUTCDate())}${p(k.getUTCHours())}${p(k.getUTCMinutes())}${p(k.getUTCSeconds())}`;
+}
+// '지금(KST)' 이후의 미래 봉(KIS가 격자로 채워 보냄) + 끝의 미체결(거래량 0) 봉 제거
+function trimFuture(bars: { d: string; t: string; close: number; volume: number }[]) {
+  const nk = nowKeyKST();
+  let out = bars.filter((b) => b.d + b.t <= nk);
+  if (out.length < 2) out = bars.slice(); // 시계 오차 등으로 다 잘리면 원본
+  while (out.length > 1 && (out[out.length - 1].volume || 0) === 0) out.pop();
+  return out;
+}
+
 async function intradayRaw(code: string) {
   const seen = new Set<string>();
   const bars: { d: string; t: string; close: number; volume: number }[] = [];
@@ -90,10 +105,7 @@ async function intradayRaw(code: string) {
   }
 
   bars.sort((a, b) => (a.d + a.t < b.d + b.t ? -1 : 1));
-  // KIS는 08:00~20:00 격자를 주며 '아직 거래 안 된 미래' 구간을 같은 값으로 채워 보낸다.
-  // 끝에서부터 거래량 0인 봉(미래 평평 구간)을 잘라 '지금까지'만 남긴다.
-  while (bars.length > 1 && (bars[bars.length - 1].volume || 0) === 0) bars.pop();
-  return bars;
+  return trimFuture(bars); // '지금'(KST) 이후 미래 봉 + 끝의 미체결 봉 제거
 }
 
 // 저장소에 분봉을 누적 병합 → 최근 12시간치(720개)를 반환한다.
