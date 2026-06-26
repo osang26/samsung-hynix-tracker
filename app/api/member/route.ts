@@ -24,13 +24,20 @@ function side(o: any, prefix: "seln" | "shnu") {
 }
 
 async function fetchMember(code: string) {
-  const data = await kisGet(
-    "/uapi/domestic-stock/v1/quotations/inquire-member",
-    "FHKST01010600",
-    { FID_COND_MRKT_DIV_CODE: "J", FID_INPUT_ISCD: code }
-  );
-  const o: any = data.output || {};
-  return { code, buy: side(o, "shnu"), sell: side(o, "seln") };
+  const call = () =>
+    kisGet("/uapi/domestic-stock/v1/quotations/inquire-member", "FHKST01010600", {
+      FID_COND_MRKT_DIV_CODE: "J",
+      FID_INPUT_ISCD: code,
+    });
+  let data: any;
+  try {
+    data = await call();
+  } catch {
+    await new Promise((r) => setTimeout(r, 400)); // 일시적 fetch 실패 → 1회 재시도
+    data = await call();
+  }
+  const o: any = (Array.isArray(data.output) ? data.output[0] : data.output) || {};
+  return { code, buy: side(o, "shnu"), sell: side(o, "seln"), globNet: num(o.glob_ntby_qty) };
 }
 
 export async function GET(req: Request) {
@@ -47,7 +54,7 @@ export async function GET(req: Request) {
       );
       return NextResponse.json({ output: raw.output ?? null });
     } catch (e: any) {
-      return NextResponse.json({ error: e.message });
+      return NextResponse.json({ error: e.message, cause: String(e?.cause ?? "") });
     }
   }
 
@@ -61,6 +68,6 @@ export async function GET(req: Request) {
     await storeSet(key, result, TTL);
     return NextResponse.json(result);
   } catch (e: any) {
-    return NextResponse.json({ code, buy: [], sell: [], error: e.message });
+    return NextResponse.json({ code, buy: [], sell: [], error: e.message, cause: String(e?.cause ?? "") });
   }
 }

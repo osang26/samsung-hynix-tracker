@@ -712,6 +712,9 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
           ) : (
             <>
               <div className="sec">거래원 <span className="sub">상위 5 · 당일 누적 · KIS</span></div>
+              {typeof member.globNet === "number" && member.globNet !== 0 && (
+                <div className="mbr-glob">외국계 순매수 <b className={netClass(member.globNet)}>{signedQty(member.globNet)}주</b> <span className="muted">{member.globNet < 0 ? "(순매도)" : "(순매수)"}</span></div>
+              )}
               <div className="mbr-cols">
                 <div className="mbr-col">
                   <div className="mbr-head up">매수 상위</div>
