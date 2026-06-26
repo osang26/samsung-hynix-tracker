@@ -115,13 +115,13 @@ async function mergeIntraday(
   code: string,
   todays: { d: string; t: string; close: number; volume: number }[]
 ) {
-  const KEY = `imin2:${code}`;
+  const KEY = `imin3:${code}`;
   const stored = (await storeGet<any[]>(KEY)) || [];
   const map = new Map<string, { d: string; t: string; close: number; volume: number }>();
   for (const b of stored) if (b && b.d && b.t) map.set(b.d + b.t, b);
   for (const b of todays) map.set(b.d + b.t, b); // 오늘 최신값으로 덮어쓰기
-  let all = [...map.values()];
-  all.sort((a, b) => (a.d + a.t < b.d + b.t ? -1 : 1));
+  // 버퍼에도 미래/평평 꼬리가 섞이지 않게 정리한 뒤 저장·반환
+  let all = trimFuture([...map.values()].sort((a, b) => (a.d + a.t < b.d + b.t ? -1 : 1)));
   if (all.length > 1500) all = all.slice(-1500); // 최근 ~2거래일치만 보관
   await storeSet(KEY, all, 4 * 24 * 3600); // 4일 보관
   return all.slice(-SESSION_MIN);
