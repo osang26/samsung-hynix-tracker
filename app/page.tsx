@@ -208,10 +208,19 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     return () => clearInterval(id);
   }, [code]);
 
-  // 차트: 기간(range)이 바뀔 때마다 다시 받아옴
+  // 차트: 기간(range)이 바뀔 때 받아옴. 1일은 20초마다 새 분봉으로 갱신(실시간 느낌).
   useEffect(() => {
-    setChart(null);
-    fetch(`/api/chart?code=${code}&range=${range}`).then((r) => r.json()).then(setChart).catch(() => setChart({ error: "차트 오류" }));
+    let alive = true;
+    const load = (clear: boolean) => {
+      if (clear) setChart(null);
+      fetch(`/api/chart?code=${code}&range=${range}`)
+        .then((r) => r.json())
+        .then((d) => { if (alive) setChart(d); })
+        .catch(() => { if (alive) setChart({ error: "차트 오류" }); });
+    };
+    load(true);
+    const id = range === "1D" ? setInterval(() => load(false), 20000) : null;
+    return () => { alive = false; if (id) clearInterval(id); };
   }, [code, range]);
 
   // PER = 시가총액 ÷ 순이익 (직접 계산). 분기 입력값이 있으면 최근 4분기 합, 없으면 KIS 연간 순이익.
@@ -249,6 +258,13 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     invItems.find((it: any) => it.frgnAmt || it.orgnAmt || it.prsnAmt || it.frgnQty || it.orgnQty || it.prsnQty) ||
     invItems[0] ||
     null;
+
+  // 1일 차트: 끝점에 실시간 가격을 붙여 주가가 바뀔 때마다 끝선이 움직이게 한다
+  const baseChart = (chart && chart.series) || [];
+  const chartSeries =
+    range === "1D" && baseChart.length > 0 && quote && quote.price
+      ? [...baseChart, { label: "지금", close: quote.price, volume: 0 }]
+      : baseChart;
 
   return (
     <div className="card">
@@ -305,7 +321,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
             {chart && chart.series && chart.series.length > 0 ? (
               <div className="chartwrap">
                 <ResponsiveContainer width="100%" height={140}>
-                  <LineChart data={chart.series} margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
+                  <LineChart data={chartSeries} margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
                     <XAxis dataKey="label" hide />
                     <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fill: "#7e8ca6" }} width={50} tickFormatter={(v: any) => Number(v).toLocaleString("ko-KR")} />
                     <Tooltip formatter={(v: any) => won(v)} contentStyle={{ background: "#ffffff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434", boxShadow: "0 2px 10px rgba(20,40,80,0.12)" }} />
@@ -314,7 +330,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
                 </ResponsiveContainer>
                 <div className="vol-cap">거래량</div>
                 <ResponsiveContainer width="100%" height={58}>
-                  <BarChart data={chart.series} margin={{ top: 0, right: 8, left: 8, bottom: 0 }} barCategoryGap={0}>
+                  <BarChart data={chartSeries} margin={{ top: 0, right: 8, left: 8, bottom: 0 }} barCategoryGap={0}>
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#7e8ca6" }} minTickGap={36} />
                     <YAxis width={50} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={(v: any) => compactVol(v)} />
                     <Tooltip formatter={(v: any) => Number(v).toLocaleString("ko-KR") + "주"} contentStyle={{ background: "#ffffff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434", boxShadow: "0 2px 10px rgba(20,40,80,0.12)" }} />

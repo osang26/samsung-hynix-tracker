@@ -11,7 +11,7 @@ const CFG: Record<
   Range,
   { candle: string; period?: "D" | "W"; days?: number; take: number; ttl: number }
 > = {
-  "1D": { candle: "분봉", take: 800, ttl: 60 },
+  "1D": { candle: "분봉", take: 800, ttl: 20 },
   "1W": { candle: "일봉", period: "D", days: 12, take: 7, ttl: 600 },
   "1M": { candle: "일봉", period: "D", days: 45, take: 22, ttl: 3600 },
   "3M": { candle: "일봉", period: "D", days: 130, take: 66, ttl: 3600 },
@@ -90,7 +90,10 @@ async function intradayRaw(code: string) {
   }
 
   bars.sort((a, b) => (a.d + a.t < b.d + b.t ? -1 : 1));
-  return bars; // 원자료(당일 + KIS가 주는 만큼)
+  // KIS는 08:00~20:00 격자를 주며 '아직 거래 안 된 미래' 구간을 같은 값으로 채워 보낸다.
+  // 끝에서부터 거래량 0인 봉(미래 평평 구간)을 잘라 '지금까지'만 남긴다.
+  while (bars.length > 1 && (bars[bars.length - 1].volume || 0) === 0) bars.pop();
+  return bars;
 }
 
 // 저장소에 분봉을 누적 병합 → 최근 12시간치(720개)를 반환한다.
@@ -100,7 +103,7 @@ async function mergeIntraday(
   code: string,
   todays: { d: string; t: string; close: number; volume: number }[]
 ) {
-  const KEY = `imin:${code}`;
+  const KEY = `imin2:${code}`;
   const stored = (await storeGet<any[]>(KEY)) || [];
   const map = new Map<string, { d: string; t: string; close: number; volume: number }>();
   for (const b of stored) if (b && b.d && b.t) map.set(b.d + b.t, b);
