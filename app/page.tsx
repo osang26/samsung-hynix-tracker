@@ -803,6 +803,7 @@ export default function Home() {
         <h1>📈 <span>삼성전자</span> · <span>SK하이닉스</span> 트래커</h1>
         <div className="meta">
           <span className="refresh-dot" />5초마다 자동 갱신 · {now}
+          <button className="widget-btn" onClick={() => window.open("/widget", "shwidget", "width=380,height=540")}>📊 위젯</button>
         </div>
       </div>
 

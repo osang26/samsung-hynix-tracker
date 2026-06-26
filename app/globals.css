@@ -154,6 +154,25 @@ a { color: inherit; text-decoration: none; }
 .mbr-qty { font-weight: 800; flex-shrink: 0; }
 .mbr-glob { font-size: 12.5px; color: var(--muted); margin: 0 2px 9px; }
 .mbr-glob b { font-weight: 800; }
+
+/* 실시간 위젯 (/widget) */
+.wbox { max-width: 340px; margin: 26px auto; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 20px 20px 16px; box-shadow: var(--shadow); text-align: center; }
+.wtoggle { display: flex; gap: 6px; justify-content: center; margin-bottom: 14px; }
+.wtab { flex: 1; background: var(--tint); border: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 700; padding: 7px; border-radius: 999px; cursor: pointer; font-family: inherit; }
+.wtab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wmkt { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .06em; }
+.wname { font-size: 17px; font-weight: 800; color: var(--ink); margin-top: 2px; }
+.wcode { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 3px; }
+.wprice { font-size: 38px; font-weight: 800; color: var(--ink); margin: 12px 0 9px; letter-spacing: -1px; }
+.wchg { display: inline-block; font-size: 15px; font-weight: 800; padding: 7px 16px; border-radius: 999px; }
+.wsub { font-size: 12.5px; color: var(--muted); margin-top: 13px; font-weight: 600; }
+.wstatus { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.wdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #2bb673; margin-right: 5px; vertical-align: middle; animation: pulse 2s infinite; }
+.wskel { font-size: 14px; color: var(--muted); padding: 44px 0; }
+.wlink { display: inline-block; margin-top: 16px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.wlink:hover { color: var(--accent); }
+.widget-btn { margin-left: 10px; background: var(--accent); border: none; color: #fff; font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; font-family: inherit; }
+.widget-btn:hover { background: var(--accent-d); }
 .cons-bar .seg { height: 100%; }
 .cons-bar .seg.up { background: var(--up); }
 .cons-bar .seg.flat { background: var(--flat); }
