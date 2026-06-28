@@ -173,6 +173,38 @@ a { color: inherit; text-decoration: none; }
 .wlink:hover { color: var(--accent); }
 .widget-btn { margin-left: 10px; background: var(--accent); border: none; color: #fff; font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; font-family: inherit; }
 .widget-btn:hover { background: var(--accent-d); }
+.adr-link { margin-left: 8px; background: var(--tint); border: 1px solid var(--line); color: var(--accent); font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px; cursor: pointer; font-family: inherit; }
+.adr-link:hover { border-color: var(--accent); }
+
+/* ADR 공모가 시뮬레이터 (/adr) */
+.adr { max-width: 480px; margin: 24px auto; padding: 0 16px 60px; }
+.adr-head h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.3px; color: var(--ink); }
+.adr-sub { font-size: 12.5px; color: var(--muted); font-weight: 600; margin-bottom: 16px; }
+.adr-live { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.adr-livecard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
+.adr-livecard .k { font-size: 12px; color: var(--muted); font-weight: 700; }
+.adr-livecard .v { font-size: 19px; font-weight: 800; color: var(--ink); margin-top: 4px; }
+.adr-livecard .t { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+.adr-sec { margin: 18px 0 8px; font-size: 13px; font-weight: 800; color: var(--muted); }
+.adr-opt { font-weight: 600; font-size: 11px; }
+.adr-disc { display: flex; gap: 8px; align-items: center; }
+.adr-preset { background: var(--tint); border: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px; cursor: pointer; font-family: inherit; }
+.adr-preset.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.adr-inp { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.adr-inp input { width: 72px; font-size: 15px; font-weight: 800; text-align: right; border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font-family: inherit; color: var(--ink); }
+.adr-result { background: linear-gradient(135deg, #eef4ff, #ffffff 62%); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 14px; padding: 16px; margin-top: 8px; box-shadow: var(--shadow); }
+.adr-rlabel { font-size: 12.5px; color: var(--muted); font-weight: 700; }
+.adr-rprice { font-size: 40px; font-weight: 800; color: var(--accent); letter-spacing: -1px; margin: 2px 0 6px; }
+.adr-calc { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.adr-th, .adr-tr { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: 13px; padding: 9px 6px; align-items: center; }
+.adr-th { color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--line); }
+.adr-th span:not(:first-child), .adr-tr span:not(:first-child) { text-align: right; }
+.adr-tr { border-bottom: 1px solid rgba(0,0,0,0.05); }
+.adr-v { font-weight: 800; color: var(--accent); }
+.adr-ov { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.adr-ov label { font-size: 12px; color: var(--muted); font-weight: 700; display: flex; flex-direction: column; gap: 4px; }
+.adr-ov input { font-size: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-family: inherit; color: var(--ink); }
+.adr-note { font-size: 11.5px; color: var(--muted); margin-top: 16px; line-height: 1.6; background: var(--tint); border-radius: 10px; padding: 10px 12px; }
 .cons-bar .seg { height: 100%; }
 .cons-bar .seg.up { background: var(--up); }
 .cons-bar .seg.flat { background: var(--flat); }

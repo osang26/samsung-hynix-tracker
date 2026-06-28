@@ -804,6 +804,7 @@ export default function Home() {
         <div className="meta">
           <span className="refresh-dot" />5초마다 자동 갱신 · {now}
           <button className="widget-btn" onClick={() => window.open("/widget", "shwidget", "width=380,height=540")}>📊 위젯</button>
+          <a className="adr-link" href="/adr">🇺🇸 ADR</a>
         </div>
       </div>
 
