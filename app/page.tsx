@@ -171,6 +171,8 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const [invPeriod, setInvPeriod] = useState("week"); // 투자자 기간: week|month|year
   const [short, setShort] = useState<any>(null);
   const [member, setMember] = useState<any>(null);
+  const [adr, setAdr] = useState<any>(null); // SKHY 나스닥 ADR 실시간가
+  const [fx, setFx] = useState<any>(null); // 원/달러 환율
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
   const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
   const [finMode, setFinMode] = useState("q"); // 재무: q(분기) | y(연간)
@@ -206,6 +208,20 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     loadMember();
     const id = setInterval(loadMember, 15000);
     return () => clearInterval(id);
+  }, [code]);
+
+  // ADR(SKHY) 실시간가 10초 + 환율 10분 — SK하이닉스(000660)에서만
+  useEffect(() => {
+    if (code !== "000660") return;
+    const loadAdr = () =>
+      fetch(`/api/adr`, { cache: "no-store" }).then((r) => r.json()).then(setAdr).catch(() => setAdr(null));
+    const loadFx = () =>
+      fetch(`/api/fx`, { cache: "no-store" }).then((r) => r.json()).then(setFx).catch(() => setFx(null));
+    loadAdr();
+    loadFx();
+    const idA = setInterval(loadAdr, 10000);
+    const idF = setInterval(loadFx, 600000);
+    return () => { clearInterval(idA); clearInterval(idF); };
   }, [code]);
 
   // 차트: 기간(range)이 바뀔 때 받아옴. 1일은 20초마다 새 분봉으로 갱신(실시간 느낌).
@@ -300,6 +316,9 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
         <button className={"tab-btn" + (tab === "inv" ? " active" : "")} onClick={() => setTab("inv")}>투자자</button>
         <button className={"tab-btn" + (tab === "short" ? " active" : "")} onClick={() => setTab("short")}>공매도</button>
         <button className={"tab-btn" + (tab === "member" ? " active" : "")} onClick={() => setTab("member")}>거래원</button>
+        {code === "000660" && (
+          <button className={"tab-btn" + (tab === "adr" ? " active" : "")} onClick={() => setTab("adr")}>ADR</button>
+        )}
       </div>
 
       <div className="tab-panel">
@@ -754,6 +773,53 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
               <div className="fin-note">상위 5개 거래원 · 당일 누적 거래량(주) · 15초 갱신 · KIS</div>
             </>
           ))}
+
+        {tab === "adr" && (() => {
+          const hynix = quote && quote.price ? Number(quote.price) : null;        // 본주(원)
+          const adrPrice = adr && adr.price ? Number(adr.price) : null;           // ADR($)
+          const fxRate = fx && fx.rate ? Number(fx.rate) : null;                  // 원/달러
+          const RATIO = 0.1;                                                      // 10 ADR = 보통주 1주
+          const fairUsd = hynix && fxRate ? (hynix * RATIO) / fxRate : null;      // 이론 ADR가($)
+          // 괴리율(비율) = ADR가 × 환율 × 10 ÷ 본주가 (100% = 적정가)
+          const parity = adrPrice && fxRate && hynix ? ((adrPrice * fxRate * 10) / hynix) * 100 : null;
+          const dev = parity != null ? parity - 100 : null;                       // 프리미엄(+)/디스카운트(−)
+          const devClass = dev == null ? "" : dev > 0.1 ? "up" : dev < -0.1 ? "down" : "";
+          const sessLabel: Record<string, string> = { regular: "정규장", premarket: "프리마켓", afterhours: "애프터마켓", daymarket: "데이마켓", closed: "장 마감" };
+          return (
+            <>
+              <div className="sec">🇺🇸 나스닥 ADR 괴리율 <span className="sub">SKHY · {adr ? (sessLabel[adr.session] || adr.session) : "연결 중…"}</span></div>
+
+              <div style={{ textAlign: "center", padding: "16px 0 10px", borderRadius: 12, background: "#f7f9fc", border: "1px solid #e8edf4", margin: "4px 0 12px" }}>
+                <div style={{ fontSize: 12, color: "#7e8ca6" }}>본주 대비 괴리율</div>
+                <div className={devClass} style={{ fontSize: 36, fontWeight: 800, lineHeight: 1.15, margin: "2px 0" }}>
+                  {dev == null ? "—" : (dev > 0 ? "+" : "") + dev.toFixed(2) + "%"}
+                </div>
+                <div style={{ fontSize: 12, color: "#7e8ca6" }}>
+                  {dev == null ? "가격 대기 중…" : dev > 0 ? "ADR이 본주보다 비싸요 (프리미엄)" : dev < 0 ? "ADR이 본주보다 싸요 (디스카운트)" : "본주와 거의 같아요"}
+                  {parity != null && <> · 패리티 {parity.toFixed(1)}%</>}
+                </div>
+              </div>
+
+              <div className="inv-cards">
+                <div className="inv-card"><div className="k">ADR 현재가</div><div className={"v " + (adr && adr.changeRate > 0 ? "up" : adr && adr.changeRate < 0 ? "down" : "")}>{adrPrice != null ? "$" + adrPrice.toFixed(2) : "…"}</div><div className="inv-qty">{adr && adrPrice != null && adr.changeRate != null ? (adr.changeRate > 0 ? "+" : "") + adr.changeRate + "%" : "SKHY"}</div></div>
+                <div className="inv-card"><div className="k">본주 현재가</div><div className="v">{hynix != null ? "₩" + Number(hynix).toLocaleString("ko-KR") : "…"}</div><div className="inv-qty">000660</div></div>
+                <div className="inv-card"><div className="k">환율(원/$)</div><div className="v">{fxRate != null ? Number(fxRate).toLocaleString("ko-KR") : "…"}</div><div className="inv-qty">USD/KRW</div></div>
+              </div>
+
+              <div className="inv-cards" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
+                <div className="inv-card"><div className="k">이론 적정가</div><div className="v">{fairUsd != null ? "$" + fairUsd.toFixed(2) : "…"}</div><div className="inv-qty">본주 × 0.1 ÷ 환율</div></div>
+                <div className="inv-card"><div className="k">ADR 실제가</div><div className={"v " + devClass}>{adrPrice != null ? "$" + adrPrice.toFixed(2) : "…"}</div><div className="inv-qty">{dev != null ? "적정 대비 " + (dev > 0 ? "+" : "") + dev.toFixed(2) + "%" : ""}</div></div>
+              </div>
+
+              <div className="fin-note">
+                괴리율 = ADR가 × 환율 × 10 ÷ 본주가 (100% = 적정). 10 ADR = 보통주 1주(전환비율 0.1). ADR 10초·환율 10분 갱신 · KIS·open.er-api
+              </div>
+              {adr && adr.available === false && (
+                <div className="muted" style={{ marginTop: 6 }}>지금은 미국 장 시간이 아니라 ADR 시세가 지연/정지될 수 있어요.</div>
+              )}
+            </>
+          );
+        })()}
       </div>
     </div>
   );
@@ -804,7 +870,6 @@ export default function Home() {
         <div className="meta">
           <span className="refresh-dot" />5초마다 자동 갱신 · {now}
           <button className="widget-btn" onClick={() => window.open("/widget", "shwidget", "width=380,height=540")}>📊 위젯</button>
-          <a className="adr-link" href="/adr">🇺🇸 ADR</a>
         </div>
       </div>
 
