@@ -173,6 +173,8 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
   const [member, setMember] = useState<any>(null);
   const [adr, setAdr] = useState<any>(null); // SKHY 나스닥 ADR 실시간가
   const [fx, setFx] = useState<any>(null); // 원/달러 환율
+  const [progSnaps, setProgSnaps] = useState<{ time: string; amt: number; qty: number }[]>([]); // 프로그램 누적 스냅샷(5초)
+  const [progMode, setProgMode] = useState<"amt" | "qty">("amt"); // 금액/수량 토글
   const [range, setRange] = useState("1D"); // 1D 1W 1M 3M 1Y (기본: 1일)
   const [newsTab, setNewsTab] = useState("news"); // 뉴스 탭 안의 서브탭: news | disc
   const [finMode, setFinMode] = useState("q"); // 재무: q(분기) | y(연간)
@@ -223,6 +225,28 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
     const idF = setInterval(loadFx, 600000);
     return () => { clearInterval(idA); clearInterval(idF); };
   }, [code]);
+
+  // 프로그램 순증: 5초마다 당일 누적 프로그램 순매수를 받아 스냅샷 축적(직전 대비 diff는 렌더에서)
+  useEffect(() => {
+    if (tab !== "prog") return;
+    setProgSnaps([]);
+    let alive = true;
+    const load = () =>
+      fetch(`/api/program?code=${code}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!alive || !d || d.error) return;
+          const amt = Number(d.cumAmt);
+          const qty = Number(d.cumQty);
+          if (!Number.isFinite(amt) && !Number.isFinite(qty)) return;
+          const time = String(d.time || "");
+          setProgSnaps((prev) => [...prev, { time, amt: amt || 0, qty: qty || 0 }].slice(-60));
+        })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(id); };
+  }, [tab, code]);
 
   // 차트: 기간(range)이 바뀔 때 받아옴. 1일은 20초마다 새 분봉으로 갱신(실시간 느낌).
   useEffect(() => {
@@ -316,6 +340,7 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
         <button className={"tab-btn" + (tab === "inv" ? " active" : "")} onClick={() => setTab("inv")}>투자자</button>
         <button className={"tab-btn" + (tab === "short" ? " active" : "")} onClick={() => setTab("short")}>공매도</button>
         <button className={"tab-btn" + (tab === "member" ? " active" : "")} onClick={() => setTab("member")}>거래원</button>
+        <button className={"tab-btn" + (tab === "prog" ? " active" : "")} onClick={() => setTab("prog")}>프로그램</button>
         {code === "000660" && (
           <button className={"tab-btn" + (tab === "adr" ? " active" : "")} onClick={() => setTab("adr")}>ADR</button>
         )}
@@ -773,6 +798,85 @@ function StockCard({ code, name, color, quote, tab, setTab }: { code: string; na
               <div className="fin-note">상위 5개 거래원 · 당일 누적 거래량(주) · 15초 갱신 · KIS</div>
             </>
           ))}
+
+        {tab === "prog" && (() => {
+          const snaps = progSnaps;
+          const mode = progMode;
+          const hhmmss = (t: string) => (t && t.length >= 6 ? `${t.slice(0, 2)}:${t.slice(2, 4)}:${t.slice(4, 6)}` : t || "");
+          const fmtWon = (v: number) => {
+            const a = Math.abs(v);
+            if (a >= 1e12) return (v / 1e12).toFixed(2) + "조";
+            if (a >= 1e8) return (v / 1e8).toFixed(1) + "억";
+            if (a >= 1e4) return (v / 1e4).toFixed(0) + "만";
+            return Math.round(v).toLocaleString("ko-KR");
+          };
+          const shortWon = (v: number) => {
+            const a = Math.abs(v);
+            if (a >= 1e12) return (v / 1e12).toFixed(0) + "조";
+            if (a >= 1e8) return (v / 1e8).toFixed(0) + "억";
+            if (a >= 1e4) return (v / 1e4).toFixed(0) + "만";
+            return String(Math.round(v));
+          };
+          const val = (s: { amt: number; qty: number }) => (mode === "amt" ? s.amt : s.qty);
+          const fmt = (v: number | null) => (v == null ? "—" : mode === "amt" ? fmtWon(v) : Math.round(v).toLocaleString("ko-KR") + "주");
+          // 인접 스냅샷 차이 = 순증 (시각이 되돌아가면 새 날 리셋 → 스킵)
+          const deltas: { label: string; d: number }[] = [];
+          for (let i = 1; i < snaps.length; i++) {
+            const cur = snaps[i], prev = snaps[i - 1];
+            if (cur.time && prev.time && cur.time < prev.time) continue;
+            deltas.push({ label: hhmmss(cur.time), d: val(cur) - val(prev) });
+          }
+          const lastDelta = deltas.length ? deltas[deltas.length - 1].d : null;
+          const lastSnap = snaps.length ? snaps[snaps.length - 1] : null;
+          const cum = lastSnap ? val(lastSnap) : null;
+          const chartData = deltas.slice(-40).map((x) => ({ label: x.label, pos: x.d > 0 ? x.d : 0, neg: x.d < 0 ? x.d : 0 }));
+          const dCol = lastDelta == null ? "#98a2b3" : lastDelta > 0 ? "#e5453b" : lastDelta < 0 ? "#2f6bdb" : "#98a2b3";
+          return (
+            <>
+              <div className="sec">🤖 프로그램 순증 <span className="sub">5초 · 직전 대비 순매수 증감 · KIS</span></div>
+              <div className="ranges">
+                <button className={"range-btn" + (mode === "amt" ? " active" : "")} onClick={() => setProgMode("amt")}>금액</button>
+                <button className={"range-btn" + (mode === "qty" ? " active" : "")} onClick={() => setProgMode("qty")}>수량</button>
+              </div>
+
+              <div style={{ textAlign: "center", padding: "14px 0 8px", borderRadius: 12, background: "#f7f9fc", border: "1px solid #e8edf4", margin: "4px 0 12px" }}>
+                <div style={{ fontSize: 12, color: "#7e8ca6" }}>최근 5초 순증{lastSnap && lastSnap.time ? " · " + hhmmss(lastSnap.time) : ""}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: dCol, lineHeight: 1.2, margin: "2px 0" }}>
+                  {lastDelta == null ? "—" : (lastDelta > 0 ? "+" : "") + fmt(lastDelta)}
+                </div>
+                <div style={{ fontSize: 12, color: "#7e8ca6" }}>
+                  {lastDelta == null ? "데이터 수집 중… (5초 후부터 표시)" : lastDelta > 0 ? "프로그램 순매수 유입" : lastDelta < 0 ? "프로그램 순매도" : "변화 없음"}
+                </div>
+              </div>
+
+              {chartData.length > 0 ? (
+                <div className="chartbox" style={{ height: 150 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 6, right: 6, left: 6, bottom: 0 }} barCategoryGap={1}>
+                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#7e8ca6" }} minTickGap={24} />
+                      <YAxis width={44} tick={{ fontSize: 9, fill: "#7e8ca6" }} tickFormatter={(v: any) => (mode === "amt" ? shortWon(v) : Number(v).toLocaleString("ko-KR"))} />
+                      <Tooltip formatter={(v: any) => (mode === "amt" ? fmtWon(v) : Number(v).toLocaleString("ko-KR") + "주")} contentStyle={{ background: "#fff", border: "1px solid #e8edf4", borderRadius: 8, fontSize: 12, color: "#1b2434" }} />
+                      <ReferenceLine y={0} stroke="#cfd9e8" />
+                      <Bar dataKey="pos" fill="#e5453b" radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="neg" fill="#2f6bdb" radius={[0, 0, 2, 2]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="skeleton" style={{ padding: "40px 0", textAlign: "center" }}>순증 데이터 모으는 중…</div>
+              )}
+
+              <div className="inv-cards" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 10 }}>
+                <div className="inv-card"><div className="k">당일 누적 순매수</div><div className="v">{cum == null ? "…" : (cum > 0 ? "+" : "") + fmt(cum)}</div><div className="inv-qty">{mode === "amt" ? "금액" : "수량"}</div></div>
+                <div className="inv-card"><div className="k">표본</div><div className="v">{snaps.length}개</div><div className="inv-qty">5초 간격</div></div>
+              </div>
+
+              <div className="fin-note">
+                KIS 종목별 프로그램매매추이(체결) · 5초마다 누적값을 받아 직전 대비 증감(순증)을 계산 · +순매수(빨강)/−순매도(파랑). KRX 갱신 주기에 따라 일부 구간은 0으로 표시될 수 있어요.
+              </div>
+            </>
+          );
+        })()}
 
         {tab === "adr" && (() => {
           const hynix = quote && quote.price ? Number(quote.price) : null;        // 본주(원)
